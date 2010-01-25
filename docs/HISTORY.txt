@@ -6,9 +6,9 @@ Changelog
 
 * Initial release
 
-transmogrify.webcrawler 0.1 - October 25, 2008
+transmogrify.htmlcontentextractor 0.1 - October 25, 2008
 
-    - renamed package from pretaweb.blueprints to transmogrify.webcrawler.
+    - renamed package from pretaweb.blueprints to transmogrify.htmlcontentextractor.
       [djay]
 
     - enhanced import view (djay)

@@ -1,31 +1,31 @@
-transmogrify.webcrawler Installation
+transmogrify.htmlcontentextractor Installation
 ==========================
 
-To install transmogrify.webcrawler into the global Python environment (or a workingenv),
+To install transmogrify.htmlcontentextractor into the global Python environment (or a workingenv),
 using a traditional Zope 2 instance, you can do this:
 
  * When you're reading this you have probably already run 
-   ``easy_install transmogrify.webcrawler``. Find out how to install setuptools
+   ``easy_install transmogrify.htmlcontentextractor``. Find out how to install setuptools
    (and EasyInstall) here:
    http://peak.telecommunity.com/DevCenter/EasyInstall
 
- * Create a file called ``transmogrify.webcrawler-configure.zcml`` in the
+ * Create a file called ``transmogrify.htmlcontentextractor-configure.zcml`` in the
    ``/path/to/instance/etc/package-includes`` directory.  The file
    should only contain this::
 
-       <include package="transmogrify.webcrawler" />
+       <include package="transmogrify.htmlcontentextractor" />
 
 
 Alternatively, if you are using zc.buildout and the plone.recipe.zope2instance
 recipe to manage your project, you can do this:
 
- * Add ``transmogrify.webcrawler`` to the list of eggs to install, e.g.:
+ * Add ``transmogrify.htmlcontentextractor`` to the list of eggs to install, e.g.:
  
     [buildout]
     ...
     eggs =
         ...
-        transmogrify.webcrawler
+        transmogrify.htmlcontentextractor
         
   * Tell the plone.recipe.zope2instance recipe to install a ZCML slug:
   
@@ -33,7 +33,7 @@ recipe to manage your project, you can do this:
     recipe = plone.recipe.zope2instance
     ...
     zcml =
-        transmogrify.webcrawler
+        transmogrify.htmlcontentextractor
         
   * Re-run buildout, e.g. with:
   
