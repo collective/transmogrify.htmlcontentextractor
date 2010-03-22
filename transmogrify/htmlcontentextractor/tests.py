@@ -124,44 +124,9 @@ def setUp(test):
     provideUtility(PrettyPrinter,
         name=u'collective.transmogrifier.sections.tests.pprinter')
     provideUtility(WebCrawler,
-        name=u'transmogrify.htmlcontentextractor.webcrawler')
+        name=u'transmogrify.webcrawler')
     provideUtility(TreeSerializer,
-        name=u'transmogrify.htmlcontentextractor.treeserializer')
-    provideUtility(TypeRecognitor,
-        name=u'transmogrify.htmlcontentextractor.typerecognitor')
-    provideUtility(TemplateFinder,
-        name=u'transmogrify.htmlcontentextractor.templatefinder')
-    provideUtility(urlnormalizer)
-    provideUtility(Relinker,
-        name=u'transmogrify.htmlcontentextractor.relinker')
-    provideUtility(SimpleXPath,
-        name=u'transmogrify.htmlcontentextractor.simplexpath')
-    provideUtility(SafePortalTransforms,
-        name=u'transmogrify.htmlcontentextractor.safeportaltransforms')
-    from backlinkstitle import BacklinksTitle
-    provideUtility(BacklinksTitle,
-        name=u'transmogrify.htmlcontentextractor.backlinkstitle')
-    from isindex import IsIndex
-    provideUtility(IsIndex,
-        name=u'transmogrify.htmlcontentextractor.isindex')
-    from pathmover import PathMover
-    provideUtility(PathMover,
-        name=u'transmogrify.htmlcontentextractor.pathmover')
-    from safeatschemaupdater import SafeATSchemaUpdaterSection
-    provideUtility(SafeATSchemaUpdaterSection,
-        name=u'transmogrify.htmlcontentextractor.safeatschemaupdater')
-    from constructor import SafeConstructorSection
-    provideUtility(SafeConstructorSection,
-        name=u'transmogrify.htmlcontentextractor.constructor')
-    from makeattachments import MakeAttachments
-    provideUtility(MakeAttachments,
-        name=u'transmogrify.htmlcontentextractor.makeattachments')
-    from debugsection import DebugSection
-    provideUtility(DebugSection,
-        name=u'transmogrify.htmlcontentextractor.debugsection')
-    from staticcreator import StaticCreatorSection
-    provideUtility(StaticCreatorSection,
-        name=u'transmogrify.htmlcontentextractor.staticcreator')
+        name=u'transmogrify.htmlcontentextractor')
 
     provideUtility(HTMLSource,
         name=u'transmogrify.htmlcontentextractor.test.htmlsource')
@@ -305,69 +270,11 @@ def test_suite():
                         doctest.NORMALIZE_WHITESPACE | doctest.REPORT_UDIFF
 
     return unittest.TestSuite((
-        doctest.DocFileSuite('webcrawler.txt', 
+
+        doctest.DocFileSuite('templatefinder.txt', 
                 setUp=setUp, 
                 optionflags = flags,
                 tearDown=tearDown),
-
-#        doctest.DocFileSuite('treeserializer.txt', 
-#                setUp=setUp, 
-#                tearDown=tearDown, 
-#                optionflags=flags),
-#        doctest.DocFileSuite('typerecognitor.txt', 
-#                setUp=setUp, 
-#                optionflags = flags,
-#                tearDown=tearDown),
-#        doctest.DocFileSuite('templatefinder.txt', 
-#                setUp=setUp, 
-#                optionflags = flags,
-#                tearDown=tearDown),
-#        doctest.DocFileSuite('relinker.txt', 
-#                setUp=setUp, 
-#                optionflags = flags,
-#                tearDown=tearDown),
-#        doctest.DocFileSuite('pathmover.txt', 
-#                setUp=setUp, 
-#                optionflags = flags,
-#                tearDown=tearDown),
-#        doctest.DocFileSuite('simplexpath.txt', 
-#                setUp=setUp, 
-#                optionflags = flags,
-#                tearDown=tearDown),
-#        doctest.DocFileSuite('testsites.txt', 
-#                setUp=setUp,
-#                optionflags = flags,
-#                tearDown=tearDown),
-#        doctest.DocFileSuite('safeatschemaupdater.txt',
-#                setUp=SafeATSchemaUpdaterSetUp,
-#                optionflags = flags,
-#                tearDown=tearDown),
-#        doctest.DocFileSuite('makeattachments.txt',
-#                setUp=MakeAttachmentsSetUp,
-#                optionflags = flags,
-#                tearDown=tearDown),
-#        doctest.DocFileSuite('isindex.txt',
-#                setUp=MakeAttachmentsSetUp,
-#                optionflags = flags,
-#                tearDown=tearDown),
-#        doctest.DocFileSuite('safeportaltransforms.txt',
-#                setUp=MakeAttachmentsSetUp,
-#                optionflags = flags,
-#                tearDown=tearDown),
-#        ztc.FunctionalDocFileSuite(
-#            'README.txt',
-#             package='transmogrify.htmlcontentextractor',
-#             test_class=TestCase,
-##            tearDown=zc.buildout.testing.buildoutTearDown,
-#             optionflags = flags,
-#            #globs=globs,
-##            checker=renormalizing.RENormalizing([
-##               zc.buildout.testing.normalize_path,
-#               #zc.buildout.testing.normalize_script,
-#               #zc.buildout.testing.normalize_egg_py,
-#               #zc.buildout.tests.normalize_bang,
-# #              ]),
-#            ),
 
 
 

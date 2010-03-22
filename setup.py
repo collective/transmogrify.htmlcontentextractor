@@ -1,12 +1,14 @@
 from setuptools import setup, find_packages
 import os
 
-version = '0.2'
+version = '1.0'
 
 setup(name='transmogrify.htmlcontentextractor',
       version=version,
-      description="",
-      long_description=open(os.path.join("transmogrify", "htmlcontentextractor", "templatefinder.txt")).read() + "\n" +
+      description="This blueprint extracts out title, description and body from html "
+                "either via xpath or by automatic cluster analysis",
+      long_description=open('README.txt').read() + '\n'+
+                      #open(os.path.join("transmogrify", "htmlcontentextractor", "templatefinder.txt")).read() + "\n" +
                        open(os.path.join("docs", "HISTORY.txt")).read(),
       # Get more strings from http://www.python.org/pypi?%3Aaction=list_classifiers
       classifiers=[
@@ -30,5 +32,7 @@ setup(name='transmogrify.htmlcontentextractor',
           'collective.transmogrifier',
           ],
       entry_points="""
+            [z3c.autoinclude.plugin]
+            target = transmogrify
             """,
             )

@@ -1,8 +1,8 @@
 TemplateFinder
 ==============
 
-This blueprint reads in all teh text of html pages and finds patterns. It will then strip
-the reaccuring patterns away to effectively detemplate a site leaving just the html content.
+This blueprint extracts out fields from html either via xpath or by automatic cluster
+analysis
 
 
 >>> from os.path import dirname
