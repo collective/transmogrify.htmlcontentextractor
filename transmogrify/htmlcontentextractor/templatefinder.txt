@@ -4,6 +4,23 @@ TemplateFinder
 This blueprint extracts out fields from html either via xpath or by automatic cluster
 analysis
 
+The blueprint takes rules of the following form
+
+N-field = (text|html|delete|optional) xpath
+
+N is the group number. Groups are run in order of group number. If
+any rule doesn't match (unless its marked optional) then the next group
+will be tried instead.
+
+"field" is the attribute that will be set with the results of the xpath
+
+"format" is what to do with the results of the xpath. "optional" means the same
+as "delete" but won't cause the group to not match. if the format is delete or optional
+then the field name doesn't matter but will still need to be unique
+
+"xpath' is an xpath expression
+
+
 
 >>> from os.path import dirname
 >>> from os.path import abspath

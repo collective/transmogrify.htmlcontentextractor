@@ -18,6 +18,10 @@ import lxml.html.soupparser
 from StringIO import StringIO
 from sys import stderr
 
+import logging
+logger = logging.getLogger('Plone')
+
+
 #patch LayoutCluster to make it LayoutPattern
 def match_blocks(self, blocks0, strict=True):
     diffs = [ d for (d,m,p) in self.pattern ]
@@ -124,7 +128,7 @@ class TemplateFinder(object):
                 group, field = '1',key
             xps = []
             for line in value.strip().split('\n'):
-                res = re.findall("^(text |html |)(.*)$", line)
+                res = re.findall("^(text |html |optional |delete |)(.*)$", line)
                 if not res:
                     continue
                 else:
@@ -137,8 +141,6 @@ class TemplateFinder(object):
 
 
     def __iter__(self):
-
-
         notextracted = []
         for item in self.previous:
             content = self.getHtml(item)
@@ -159,8 +161,6 @@ class TemplateFinder(object):
                 yield item
             else:
                 notextracted.append(item)
-
-
         if self.auto:
             for item in self.analyse(notextracted):
                 yield item
@@ -178,7 +178,8 @@ class TemplateFinder(object):
                 nodes = tree.xpath(xp, namespaces=ns)
                 if not nodes:
                     print "TemplateFinder: NOMATCH: %s=%s(%s)" % (field, format, xp)
-                    return False
+                    if format.lower() != 'optional':
+                        return False
                 nodes = [(format, n) for n in nodes]
                 unique[field] = nonoverlap(unique.setdefault(field,[]), nodes)
         extracted = {}
@@ -189,10 +190,12 @@ class TemplateFinder(object):
         for field, nodes in unique.items():
             for format, node in nodes:
                 extracted.setdefault(field,'')
-                if format == 'text':
+                if format.lower() in ['text']:
                     extracted[field] += etree.tostring(node, method='text', encoding=unicode) + ' '
-                else:
+                elif format.lower() == 'html':
                     extracted[field] += '<div>%s</div>' % etree.tostring(node, method='html', encoding=unicode)
+                elif format.lower() in ['optional','delete']:
+                    pass
         item.update(extracted)
         if '_tree' in item:
             del item['_tree']
