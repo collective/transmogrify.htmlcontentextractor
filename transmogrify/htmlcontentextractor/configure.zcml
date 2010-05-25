@@ -11,5 +11,7 @@
     <utility component=".templatefinder.TemplateFinder"
              name="transmogrify.htmlcontentextractor" />
 
+    <utility component=".autofinder.AutoFinder"
+             name="transmogrify.htmlcontentextractor.auto" />
 
 </configure>
