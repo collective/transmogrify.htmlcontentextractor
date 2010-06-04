@@ -163,7 +163,7 @@ class TemplateFinder(object):
             for format, node in nodes:
                 extracted.setdefault(field,'')
                 if format.lower() in ['text']:
-                    extracted[field] += etree.tostring(node, method='text', encoding=unicode) + ' '
+                    extracted[field] += etree.tostring(node, method='text', encoding=unicode, with_tail=False) + ' '
                 elif format.lower() == 'html':
                     extracted[field] += '<div>%s</div>' % etree.tostring(node, method='html', encoding=unicode)
                 elif format.lower() in ['optional','delete']:
