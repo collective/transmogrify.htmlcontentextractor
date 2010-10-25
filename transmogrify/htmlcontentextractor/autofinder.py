@@ -180,7 +180,7 @@ class AutoFinder(object):
               for b in sect.blocks:
                 print >>stderr, '   %s' % enc(b.orig_text)
 
-
+          xpaths = {}
           for sectno in xrange(len(layout)):
             sect = layout[sectno]
             field = None
@@ -200,11 +200,17 @@ class AutoFinder(object):
                   print 'SUB-%d: %s' % (sect.id, enc(b.orig_text))
 
               if field:
-                  for node in tree.xpath(toXPath(sect.path), namespaces=ns):
+                  xpath = toXPath(sect.path)
+                  xpaths.setdefault(field,[]).append(xpath)
+                  for node in tree.xpath(xpath, namespaces=ns):
                       item.setdefault(field,'')
                       method = field == 'title' and 'text' or 'html'
                       item[field] += etree.tostring(node, method=method, encoding=unicode) + ' '
-                      
+                      if method == 'html':
+                        #so lxml from_fragment won't freak out
+                        item[field] = '<div>%s</div>'% item[field]
+          for field,xp in xpaths.items():
+                print "Auto Template\n%s= html %s"%(field,'\n\t'.join(xp))
 
 
         print

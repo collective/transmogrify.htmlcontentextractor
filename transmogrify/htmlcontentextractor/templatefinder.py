@@ -103,14 +103,13 @@ class TemplateFinder(object):
             except:
                 group, field = '1',key
             xps = []
+            res = re.findall("(?m)^(text|html|optional|delete)\s(.*)$", value)
+            if not res:
+                format,value = 'html',value           
+            else:
+                format,value = res[0]
             for line in value.strip().split('\n'):
-                res = re.findall("^(text |html |optional |delete |)(.*)$", line)
-                if not res:
-                    continue
-                else:
-                    format,xp = res[0]
-                format = format.strip()
-                format = format == '' and 'html' or format
+                xp = line.strip()
                 xps.append((format,xp))
             group = self.groups.setdefault(group, {})
             group[field] = xps
@@ -146,6 +145,9 @@ class TemplateFinder(object):
         for field, xps in pats.items():
             if field == 'path':
                 continue
+            if field in item:
+                # don't apply the template if another has already been applied
+                return
             for format, xp in xps:
                 nodes = tree.xpath(xp, namespaces=ns)
                 if not nodes:
