@@ -105,6 +105,8 @@ class AutoFinder(object):
 
     def __init__(self, transmogrifier, name, options, previous):
         self.previous = previous
+        self.disable = options.get('disable','False')
+        self.disable = self.disable.lower() == 'true'
  
 
     def __iter__(self):
@@ -123,7 +125,11 @@ class AutoFinder(object):
         items = []
         for item in previous:
             content = self.getHtml(item)
-            if content is not None:
+            if self.disable:
+                yield item
+            elif item.get('_template'):
+                yield item
+            elif content is not None:
                 feeder.feed_page(item['_site_url'] + item['_path'], content)
                 items.append(item)
             else:
@@ -187,7 +193,9 @@ class AutoFinder(object):
             if sectno == pat1.title_sectno:
               field = 'title'
               for b in sect.blocks:
-                print 'TITLE: %s' % enc(b.orig_text)
+                title = enc(b.orig_text)
+                field = 'title'
+                print 'TITLE: %s' % title
 
             elif diffscore_threshold <= sect.diffscore:
               if pat1.title_sectno < sectno and main_threshold <= sect.mainscore:
@@ -199,18 +207,20 @@ class AutoFinder(object):
                 for b in sect.blocks:
                   print 'SUB-%d: %s' % (sect.id, enc(b.orig_text))
 
-              if field:
-                  xpath = toXPath(sect.path)
-                  xpaths.setdefault(field,[]).append(xpath)
-                  for node in tree.xpath(xpath, namespaces=ns):
+            if field:
+                xpath = toXPath(sect.path)
+                xpaths.setdefault(field,[]).append(xpath)
+                for node in tree.xpath(xpath, namespaces=ns):
                       item.setdefault(field,'')
                       method = field == 'title' and 'text' or 'html'
                       item[field] += etree.tostring(node, method=method, encoding=unicode) + ' '
                       if method == 'html':
                         #so lxml from_fragment won't freak out
                         item[field] = '<div>%s</div>'% item[field]
-          for field,xp in xpaths.items():
-                print "Auto Template\n%s= html %s"%(field,'\n\t'.join(xp))
+          if xpaths:
+            print "Auto Template"
+            for field,xp in xpaths.items():
+                print "%s= html %s"%(field,'\n\t'.join(xp))
 
 
         print
