@@ -14,6 +14,7 @@ from webstemmer.htmldom import parse
 from lxml import etree
 import lxml.html
 import lxml.html.soupparser
+import lxml.etree
 
 from StringIO import StringIO
 from sys import stderr
@@ -145,13 +146,13 @@ class TemplateFinder(object):
         for field, xps in pats.items():
             if field == 'path':
                 continue
-            if field in item:
+            if '_template' in item:
                 # don't apply the template if another has already been applied
                 return
             for format, xp in xps:
                 nodes = tree.xpath(xp, namespaces=ns)
                 if not nodes:
-                    print "TemplateFinder: NOMATCH: %s=%s(%s)" % (field, format, xp)
+                    #print "TemplateFinder: NOMATCH: %s=%s %s" % (field, format, xp)
                     if format.lower() != 'optional':
                         return False
                 nodes = [(format, n) for n in nodes]
@@ -170,7 +171,18 @@ class TemplateFinder(object):
                     extracted[field] += '<div>%s</div>' % etree.tostring(node, method='html', encoding=unicode)
                 elif format.lower() in ['optional','delete']:
                     pass
+        for field, nodes in unique.items():
+            for format, node in nodes:
+                html = extracted[field]
+                try:
+                    lxml.html.fragment_fromstring(html)
+                except lxml.etree.ParserError:
+                    extracted[field] = "<div>%s</div>" % html
+                
+
+       
         item.update(extracted)
+        print "TemplateFinder: MATCH: %s %s" % (item['_path'], extracted.keys())
         if '_tree' in item:
             del item['_tree']
         item['_template'] = None
