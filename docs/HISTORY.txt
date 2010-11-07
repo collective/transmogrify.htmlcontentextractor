@@ -1,7 +1,26 @@
 Changelog
 =========
 
-1.0 - Unreleased
-----------------
+1.0b1 (2010-11-03)
+------------------
+
+- ignore already found items. better debug
+  ["Dylan Jay"]
+
+- skip templates if item already parsed
+  ["Dylan Jay"]
+  
+- print automaticly found XPaths
+  ["Dylan Jay"]
+  
+- make text fields strip tail text
+  ["Vitaliy Podoba"]
+  
+1.0dev (2010-03-22)
+-------------------
+
+- split the auto templatefinder out to it's own blueprint
+  ["Dylan Jay"]
+
 
 
