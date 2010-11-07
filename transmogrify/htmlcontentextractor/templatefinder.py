@@ -168,7 +168,7 @@ class TemplateFinder(object):
                 if format.lower() in ['text']:
                     extracted[field] += etree.tostring(node, method='text', encoding=unicode, with_tail=False) + ' '
                 elif format.lower() == 'html':
-                    extracted[field] += '<div>%s</div>' % etree.tostring(node, method='html', encoding=unicode)
+                    extracted[field] += etree.tostring(node, method='html', encoding=unicode)
                 elif format.lower() in ['optional','delete']:
                     pass
         for field, nodes in unique.items():
@@ -177,7 +177,7 @@ class TemplateFinder(object):
                 try:
                     lxml.html.fragment_fromstring(html)
                 except lxml.etree.ParserError:
-                    extracted[field] = "<div>%s</div>" % html
+                    extracted[field] = html
                 
 
        
