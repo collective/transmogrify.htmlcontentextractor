@@ -5,6 +5,8 @@ from zope.interface import implements
 from collective.transmogrifier.interfaces import ISectionBlueprint
 from collective.transmogrifier.interfaces import ISection
 from collective.transmogrifier.utils import Matcher
+from collective.transmogrifier.utils import Condition
+
 
 from webstemmer.analyze import PageFeeder, LayoutAnalyzer, LayoutCluster
 from webstemmer.extract import TextExtractor, LayoutPatternSet, LayoutPattern
@@ -107,6 +109,9 @@ class AutoFinder(object):
         self.previous = previous
         self.disable = options.get('disable','False')
         self.disable = self.disable.lower() == 'true'
+        self.condition = Condition(options.get('condition', 'python:True'),
+                                   transmogrifier, name, options)
+
  
 
     def __iter__(self):
@@ -126,6 +131,8 @@ class AutoFinder(object):
         for item in previous:
             content = self.getHtml(item)
             if self.disable:
+                yield item
+            elif not self.condition(item):
                 yield item
             elif item.get('_template'):
                 yield item

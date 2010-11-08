@@ -1,6 +1,11 @@
 Changelog
 =========
 
+1.0b2 (2010-11-09)
+------------------
+
+- Put condition on autofinder so can be turned off
+
 1.0b1 (2010-11-03)
 ------------------
 
