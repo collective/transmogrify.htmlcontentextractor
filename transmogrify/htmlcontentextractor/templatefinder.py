@@ -20,10 +20,7 @@ from StringIO import StringIO
 from sys import stderr
 
 import logging
-logger = logging.getLogger('Plone')
-
-
-
+log = logging.getLogger('templatefinder')
 
 
 
@@ -96,11 +93,13 @@ class TemplateFinder(object):
         self.auto = options.get('auto', True)
         self.auto = self.auto in ['True','true','yes','Y']
         self.groups = {}
+        self.name = name
         for key, value in options.items():
             if key in ['blueprint','auto']:
                 continue
             try:
                 group, field = key.split('-', 1)
+                group = int(group)
             except:
                 group, field = '1',key
             xps = []
@@ -121,6 +120,7 @@ class TemplateFinder(object):
         for item in self.previous:
             content = self.getHtml(item)
             if content is None:
+                #log.warning('(%s) content is None'%item['_path'])
                 yield item
                 continue
             path = item['_site_url'] + item['_path']
@@ -143,6 +143,8 @@ class TemplateFinder(object):
 
     def extract(self, pats, tree, item):
         unique = {}
+        nomatch = []
+        optional = []
         for field, xps in pats.items():
             if field == 'path':
                 continue
@@ -152,11 +154,24 @@ class TemplateFinder(object):
             for format, xp in xps:
                 nodes = tree.xpath(xp, namespaces=ns)
                 if not nodes:
-                    #print "TemplateFinder: NOMATCH: %s=%s %s" % (field, format, xp)
                     if format.lower() != 'optional':
-                        return False
+                        nomatch.append( (field,xp) )
+                        log.debug("FAIL(%s) %s:%s=%s %s\n%s"%(item['_path'],
+                                                        self.name,
+                                                        field, format, xp,
+                                                        etree.tostring(tree, method='html', encoding=unicode)))
+                        continue
+                    else:
+                        optional.append( (field, xp))
+                
                 nodes = [(format, n) for n in nodes]
                 unique[field] = nonoverlap(unique.setdefault(field,[]), nodes)
+        if nomatch:
+            matched = [field for field in unique.keys()]
+            unmatched = [field for field, xp in nomatch]
+            log.info( "FAIL(%s): %s matched=%s, unmatched=%s" % (item['_path'],
+                                                             self.name, matched, unmatched) )
+            return False
         extracted = {}
         # we will pull selected nodes out of tree so data isn't repeated
         for field, nodes in unique.items():
@@ -178,11 +193,10 @@ class TemplateFinder(object):
                     lxml.html.fragment_fromstring(html)
                 except lxml.etree.ParserError:
                     extracted[field] = html
-                
-
        
         item.update(extracted)
-        print "TemplateFinder: MATCH: %s %s" % (item['_path'], extracted.keys())
+        unmatched = [field for field,xp in optional]
+        log.info( "PASS(%s): %s matched=%s" % (item['_path'], self.name, unique.keys()) )
         if '_tree' in item:
             del item['_tree']
         item['_template'] = None

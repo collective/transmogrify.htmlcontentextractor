@@ -21,7 +21,7 @@ from StringIO import StringIO
 from sys import stderr
 
 import logging
-logger = logging.getLogger('Plone')
+log = logging.getLogger('autofinder')
 
 
 #patch LayoutCluster to make it LayoutPattern
@@ -137,16 +137,17 @@ class AutoFinder(object):
             elif item.get('_template'):
                 yield item
             elif content is not None:
+                count += 1
                 feeder.feed_page(item['_site_url'] + item['_path'], content)
                 items.append(item)
             else:
                 yield item
             feeder.close()
-
-        self.clusters = {}
-        clusters = analyzer.analyze(cluster_threshold, title_threshold)
-        patternset = LayoutPatternSet()
-        patternset.pats = [c for c in clusters if c.pattern and score_threshold <= c.score]
+        if items:
+            self.clusters = {}
+            clusters = analyzer.analyze(cluster_threshold, title_threshold)
+            patternset = LayoutPatternSet()
+            patternset.pats = [c for c in clusters if c.pattern and score_threshold <= c.score]
 
         #default_charset='iso-8859-1'
         pat_threshold=0.8
@@ -183,15 +184,15 @@ class AutoFinder(object):
 
         enc = lambda x: x.encode(codec_out, 'replace')
         if not layout:
-          print '!UNMATCHED: %s' % name
+          log.info('!UNMATCHED: %s' % name)
         else:
-          print '!MATCHED: %s' % name
-          print 'PATTERN: %s' % pat1.name
+          log.info( '!MATCHED: %s' % name )
+          log.info( 'PATTERN: %s' % pat1.name )
           if self.debug:
             for sect in layout:
-              print >>stderr, 'DEBUG: SECT-%d: diffscore=%.2f' % (sect.id, sect.diffscore)
+              log.debug( 'DEBUG: SECT-%d: diffscore=%.2f' % (sect.id, sect.diffscore) )
               for b in sect.blocks:
-                print >>stderr, '   %s' % enc(b.orig_text)
+                log.debug( '   %s' % enc(b.orig_text) )
 
           xpaths = {}
           for sectno in xrange(len(layout)):
@@ -202,17 +203,17 @@ class AutoFinder(object):
               for b in sect.blocks:
                 title = enc(b.orig_text)
                 field = 'title'
-                print 'TITLE: %s' % title
+                log.debug( 'TITLE: %s' % title )
 
             elif diffscore_threshold <= sect.diffscore:
               if pat1.title_sectno < sectno and main_threshold <= sect.mainscore:
                 field = 'text'
                 for b in sect.blocks:
-                  print 'MAIN-%d: %s' % (sect.id, enc(b.orig_text))
+                  log.debug( 'MAIN-%d: %s' % (sect.id, enc(b.orig_text)) )
               else:
                 field = 'text'
                 for b in sect.blocks:
-                  print 'SUB-%d: %s' % (sect.id, enc(b.orig_text))
+                  log.debug( 'SUB-%d: %s' % (sect.id, enc(b.orig_text)) )
 
             if field:
                 xpath = toXPath(sect.path)
@@ -227,7 +228,7 @@ class AutoFinder(object):
           if xpaths:
             print "Auto Template"
             for field,xp in xpaths.items():
-                print "%s= html %s"%(field,'\n\t'.join(xp))
+                log.debug( "%s= html %s"%(field,'\n\t'.join(xp)) )
 
 
         print
