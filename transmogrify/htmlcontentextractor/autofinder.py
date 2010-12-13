@@ -21,7 +21,6 @@ from StringIO import StringIO
 from sys import stderr
 
 import logging
-log = logging.getLogger('autofinder')
 
 
 #patch LayoutCluster to make it LayoutPattern
@@ -111,8 +110,8 @@ class AutoFinder(object):
         self.disable = self.disable.lower() == 'true'
         self.condition = Condition(options.get('condition', 'python:True'),
                                    transmogrifier, name, options)
+        self.log = logging.getLogger(name)
 
- 
 
     def __iter__(self):
         previous = self.previous
@@ -130,14 +129,11 @@ class AutoFinder(object):
         items = []
         for item in previous:
             content = self.getHtml(item)
-            if self.disable:
-                yield item
-            elif not self.condition(item):
+            if self.disable or not self.condition(item):
                 yield item
             elif item.get('_template'):
                 yield item
             elif content is not None:
-                count += 1
                 feeder.feed_page(item['_site_url'] + item['_path'], content)
                 items.append(item)
             else:
@@ -160,7 +156,13 @@ class AutoFinder(object):
             tree = parse(content, charset=default_charset)
             (pat1, layout) = patternset.identify_layout(tree, pat_threshold, strict=strict)
             etree = lxml.html.fromstring(content)
-            item.update( self.dump_text(name, pat1, layout, etree) )
+            newfields = self.dump_text(name, pat1, layout, etree, item['_path'])
+            if newfields:
+                self.log.info("PASS: '%s', matched=%s", item.get('_path'), newfields.keys() )
+            else:
+                self.log.info("FAIL: '%s'", item.get('_path'))
+                
+            item.update( newfields )
             yield item
 
 
@@ -175,7 +177,7 @@ class AutoFinder(object):
               else:
                   return None
 
-    def dump_text(self, name, pat1, layout, tree):
+    def dump_text(self, name, pat1, layout, tree, path):
         codec_out='utf-8'
         diffscore_threshold=0.5
         main_threshold=50
@@ -184,54 +186,54 @@ class AutoFinder(object):
 
         enc = lambda x: x.encode(codec_out, 'replace')
         if not layout:
-          log.info('!UNMATCHED: %s' % name)
-        else:
-          log.info( '!MATCHED: %s' % name )
-          log.info( 'PATTERN: %s' % pat1.name )
-          if self.debug:
+          return {}
+        
+        if self.debug:
             for sect in layout:
-              log.debug( 'DEBUG: SECT-%d: diffscore=%.2f' % (sect.id, sect.diffscore) )
-              for b in sect.blocks:
-                log.debug( '   %s' % enc(b.orig_text) )
+                self.log.debug( 'DEBUG: SECT-%d: diffscore=%.2f' % (sect.id, sect.diffscore) )
+                for b in sect.blocks:
+                    self.log.debug( '   %s' % enc(b.orig_text) )
 
-          xpaths = {}
-          for sectno in xrange(len(layout)):
-            sect = layout[sectno]
-            field = None
-            if sectno == pat1.title_sectno:
+        xpaths = {}
+        parts = []
+        for sectno in xrange(len(layout)):
+          sect = layout[sectno]
+          field = None
+          if sectno == pat1.title_sectno:
+            field = 'title'
+            for b in sect.blocks:
+              title = enc(b.orig_text)
               field = 'title'
+              parts.append(('TITLE',title) )
+
+          elif diffscore_threshold <= sect.diffscore:
+            if pat1.title_sectno < sectno and main_threshold <= sect.mainscore:
+              field = 'text'
               for b in sect.blocks:
-                title = enc(b.orig_text)
-                field = 'title'
-                log.debug( 'TITLE: %s' % title )
+                parts.append(('MAIN-%d'%sect.id, enc(b.orig_text)) )
+            else:
+              field = 'text'
+              for b in sect.blocks:
+                parts.append(('SUB-%d'%sect.id, enc(b.orig_text)) )
 
-            elif diffscore_threshold <= sect.diffscore:
-              if pat1.title_sectno < sectno and main_threshold <= sect.mainscore:
-                field = 'text'
-                for b in sect.blocks:
-                  log.debug( 'MAIN-%d: %s' % (sect.id, enc(b.orig_text)) )
-              else:
-                field = 'text'
-                for b in sect.blocks:
-                  log.debug( 'SUB-%d: %s' % (sect.id, enc(b.orig_text)) )
+          if field:
+              xpath = toXPath(sect.path)
+              xpaths.setdefault(field,[]).append(xpath)
+              for node in tree.xpath(xpath, namespaces=ns):
+                    item.setdefault(field,'')
+                    method = field == 'title' and 'text' or 'html'
+                    item[field] += etree.tostring(node, method=method, encoding=unicode) + ' '
+                    if method == 'html':
+                      #so lxml from_fragment won't freak out
+                      item[field] = '<div>%s</div>'% item[field]
 
-            if field:
-                xpath = toXPath(sect.path)
-                xpaths.setdefault(field,[]).append(xpath)
-                for node in tree.xpath(xpath, namespaces=ns):
-                      item.setdefault(field,'')
-                      method = field == 'title' and 'text' or 'html'
-                      item[field] += etree.tostring(node, method=method, encoding=unicode) + ' '
-                      if method == 'html':
-                        #so lxml from_fragment won't freak out
-                        item[field] = '<div>%s</div>'% item[field]
-          if xpaths:
-            print "Auto Template"
-            for field,xp in xpaths.items():
-                log.debug( "%s= html %s"%(field,'\n\t'.join(xp)) )
+        if parts:
+            templates = '\n\t'.join(["%s= html %s"%(field,'\n\t'.join(xp)) for field,xp in xpaths.items()])
+            text = '\n\t'.join(["%s: %s"%v for v in parts])            
+            self.log.debug("'%s' discovered rules by clustering on '%s'\nRules:\n\t%s\nText:\n\t%s",
+                           path, pat1.name, templates, text )
 
 
-        print
         return item
 
 
