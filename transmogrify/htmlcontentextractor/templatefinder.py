@@ -20,7 +20,6 @@ from StringIO import StringIO
 from sys import stderr
 
 import logging
-log = logging.getLogger('templatefinder')
 
 
 
@@ -94,6 +93,8 @@ class TemplateFinder(object):
         self.auto = self.auto in ['True','true','yes','Y']
         self.groups = {}
         self.name = name
+        self.logger = logging.getLogger(name)
+
         for key, value in options.items():
             if key in ['blueprint','auto']:
                 continue
@@ -156,8 +157,7 @@ class TemplateFinder(object):
                 if not nodes:
                     if format.lower() != 'optional':
                         nomatch.append( (field,xp) )
-                        log.debug("FAIL(%s) %s:%s=%s %s\n%s"%(item['_path'],
-                                                        self.name,
+                        self.logger.debug("FAIL %s:%s=%s %s\n%s"%(item['_path'],
                                                         field, format, xp,
                                                         etree.tostring(tree, method='html', encoding=unicode)))
                         continue
@@ -169,8 +169,8 @@ class TemplateFinder(object):
         if nomatch:
             matched = [field for field in unique.keys()]
             unmatched = [field for field, xp in nomatch]
-            log.info( "FAIL(%s): %s matched=%s, unmatched=%s" % (item['_path'],
-                                                             self.name, matched, unmatched) )
+            self.logger.info( "FAIL: '%s' matched=%s, unmatched=%s" % (item['_path'],
+                                                             matched, unmatched) )
             return False
         extracted = {}
         # we will pull selected nodes out of tree so data isn't repeated
@@ -196,7 +196,7 @@ class TemplateFinder(object):
        
         item.update(extracted)
         unmatched = [field for field,xp in optional]
-        log.info( "PASS(%s): %s matched=%s" % (item['_path'], self.name, unique.keys()) )
+        self.logger.info( "PASS: '%s' matched=%s, unmatched=%s", item['_path'], unique.keys() , unmatched)
         if '_tree' in item:
             del item['_tree']
         item['_template'] = None
