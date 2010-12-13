@@ -96,7 +96,7 @@ class TemplateFinder(object):
         self.logger = logging.getLogger(name)
 
         for key, value in options.items():
-            if key in ['blueprint','auto']:
+            if key in ['blueprint','debug'] or key.startswith('@'):
                 continue
             try:
                 group, field = key.split('-', 1)
