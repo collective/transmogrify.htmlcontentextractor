@@ -87,10 +87,13 @@ yle="mso-bidi-font-weight:normal"><span lang="EN-AU" style="font-size:16.0pt">Ca
 ns = {'re':"http://exslt.org/regular-expressions"}
 
 import re
-attr = re.compile(r':(?P<attr>[^/:]*)=(?P<val>[^/:]*)')
+attr = re.compile(r':(?P<attr>[^/:]*)=(?P<val>[^/:\*\.\?]*)')
+reattr = re.compile(r':(?P<attr>[^/:]*)=(?P<val>[^/:]*)')
 def toXPath(pat):
     #td:valign=top/p:class=msonormal/span
-    pat = attr.sub(r'[re:test(@\g<attr>,"^\g<val>$","i")]', pat)
+    #TODO we need to make simpler xpath when re isn't being used
+    pat = attr.sub(r'[@\g<attr> = "\g<val>"]', pat)
+    pat = reattr.sub(r'[re:test(@\g<attr>,"^\g<val>$","i")]', pat)
     pat = pat.replace('/', '//')
     return "//" + pat
 
@@ -228,7 +231,8 @@ class AutoFinder(object):
                       item[field] = '<div>%s</div>'% item[field]
 
         if parts:
-            templates = '\n\t'.join(["%s= html %s"%(field,'\n\t'.join(xp)) for field,xp in xpaths.items()])
+            m = lambda field: field == 'title' and 'text' or 'html'
+            templates = '\n\t'.join(["%s= %s %s"%(field, m(field), '\n\t'.join(xp)) for field,xp in xpaths.items()])
             text = '\n\t'.join(["%s: %s"%v for v in parts])            
             self.log.debug("'%s' discovered rules by clustering on '%s'\nRules:\n\t%s\nText:\n\t%s",
                            path, pat1.name, templates, text )
