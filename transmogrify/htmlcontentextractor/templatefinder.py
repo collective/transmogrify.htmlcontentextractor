@@ -153,16 +153,23 @@ class TemplateFinder(object):
                 # don't apply the template if another has already been applied
                 return
             for format, xp in xps:
+                if xp.strip().lower().endswith('/text()'):
+                    #treat special so normal node ops still work
+                    xp = xp.strip()[:-7]
+                    if format.lower().endswith('html'):
+                        format = format.lower()[:-4]+'text'
+                    elif format.lower().startswith('optional'):
+                        format = 'optionaltext'
                 nodes = tree.xpath(xp, namespaces=ns)
                 if not nodes:
-                    if format.lower() != 'optional':
+                    if format.lower().startswith('optional'):
+                        optional.append( (field, xp))
+                    else:
                         nomatch.append( (field,xp) )
                         self.logger.debug("FAIL %s:%s=%s %s\n%s"%(item['_path'],
                                                         field, format, xp,
                                                         etree.tostring(tree, method='html', encoding=unicode)))
                         continue
-                    else:
-                        optional.append( (field, xp))
                 
                 nodes = [(format, n) for n in nodes]
                 unique[field] = nonoverlap(unique.setdefault(field,[]), nodes)
@@ -176,27 +183,35 @@ class TemplateFinder(object):
         # we will pull selected nodes out of tree so data isn't repeated
         for field, nodes in unique.items():
             for format, node in nodes:
-                node.drop_tree()
+                if getattr(node, 'drop_tree', None) is not None:
+                    node.drop_tree()
+                else:
+                    #TODO _ElementStringResult' can't use drop_tree 
+                    pass
+
         for field, nodes in unique.items():
             for format, node in nodes:
                 extracted.setdefault(field,'')
-                if format.lower() in ['text']:
+                format = format.lower().replace('optional','')
+                if format in ['delete']:
+                    continue
+                if format in ['text']:
                     extracted[field] += etree.tostring(node, method='text', encoding=unicode, with_tail=False) + ' '
-                elif format.lower() == 'html':
+                else:
                     extracted[field] += etree.tostring(node, method='html', encoding=unicode)
-                elif format.lower() in ['optional','delete']:
-                    pass
-        for field, nodes in unique.items():
-            for format, node in nodes:
-                html = extracted[field]
-                try:
-                    lxml.html.fragment_fromstring(html)
-                except lxml.etree.ParserError:
-                    extracted[field] = html
+        # What was this code for?
+        #for field, nodes in unique.items():
+        #    for format, node in nodes:
+        #        html = extracted[field]
+        #        try:
+        #            lxml.html.fragment_fromstring(html)
+        #        except lxml.etree.ParserError:
+        #            extracted[field] = html
        
         item.update(extracted)
-        unmatched = [field for field,xp in optional]
-        self.logger.info( "PASS: '%s' matched=%s, unmatched=%s", item['_path'], unique.keys() , unmatched)
+        unmatched = set([field for field,xp in optional])
+        matched = set(unique.keys()) - set(unmatched)
+        self.logger.info( "PASS: '%s' matched=%s, unmatched=%s", item['_path'], list(matched) , list(unmatched))
         if '_tree' in item:
             del item['_tree']
         item['_template'] = None
