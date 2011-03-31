@@ -15,6 +15,7 @@ from lxml import etree
 import lxml.html
 import lxml.html.soupparser
 import lxml.etree
+from collective.transmogrifier.utils import Expression
 
 from StringIO import StringIO
 from sys import stderr
@@ -104,16 +105,19 @@ class TemplateFinder(object):
             except:
                 group, field = '1',key
             xps = []
-            res = re.findall("(?m)^(text|html|optional|delete)\s(.*)$", value)
+            res = re.findall("(?m)^(text|html|optional|delete|tal|optionaltext|optionalhtml)\s(.*)$", value)
             if not res:
                 format,value = 'html',value           
             else:
                 format,value = res[0]
             for line in value.strip().split('\n'):
                 xp = line.strip()
+                if format.lower() == 'tal':
+                    xp = Expression(xp, transmogrifier, name, options)
                 xps.append((format,xp))
             group = self.groups.setdefault(group, {})
             group[field] = xps
+
 
 
     def __iter__(self):
@@ -153,6 +157,8 @@ class TemplateFinder(object):
                 # don't apply the template if another has already been applied
                 return
             for format, xp in xps:
+                if format.lower() == 'tal':
+                    continue
                 if xp.strip().lower().endswith('/text()'):
                     #treat special so normal node ops still work
                     xp = xp.strip()[:-7]
@@ -209,6 +215,19 @@ class TemplateFinder(object):
         #            extracted[field] = html
        
         item.update(extracted)
+
+        #match tal format
+        extracted = {}
+        for field, xps in pats.items():
+            if field == 'path':
+                continue
+            for format, tal in xps:
+                if format.lower() != 'tal':
+                    continue
+                value = tal(item)
+                extracted[field] = extracted.get(field, '') + value
+        item.update(extracted)
+
         unmatched = set([field for field,xp in optional])
         matched = set(unique.keys()) - set(unmatched)
         self.logger.info( "PASS: '%s' matched=%s, unmatched=%s", item['_path'], list(matched) , list(unmatched))
