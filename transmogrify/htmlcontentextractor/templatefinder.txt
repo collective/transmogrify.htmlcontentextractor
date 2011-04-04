@@ -9,11 +9,16 @@ transmogrify.htmlcontentextractor
 
 The blueprint transmogrify.htmlcontentextractor takes rules of the following form
 
-N-field = (text|html|delete|optional) xpath
+(N-)field = (optional)(text|html|delete|optional) xpath
+
+OR
+
+(N-)field = (optional)tal tal-expression
+
 
 N is the group number. Groups are run in order of group number. If
 any rule doesn't match (unless its marked optional) then the next group
-will be tried instead.
+will be tried instead. Group numbers are optional
 
 "field" is the attribute that will be set with the results of the xpath
 
@@ -23,8 +28,38 @@ then the field name doesn't matter but will still need to be unique
 
 "xpath' is an xpath expression
 
+If the format is 'tal' then instead of an XPath use can use a TAL expression. TAL expression
+is evaluated on the item object AFTER the XPath expressions have been applied.
+
+For example ::
+
+[template]
+blueprint = transmogrify.htmlcontentextractor
+title = text //div[@class='body']//h1[1]
+_permalink = text //div[@class='body']//a[@class='headerlink']
+_text = html //div[@class='body']
+_label = optional //p[contains(@class,'admonition-title')]
+description = optional //div[contains(@class,'admonition-description')]/p[@class='last']/text()
+_remove_useless_links = optional //div[@id = 'indices-and-tables']
+mimetype = tal string:text/html
+text = tal python:item['_text'].replace('id="blah"','')
+
+We delete a number of parts of the html by extracting content to fields such as _permalink and _label.
+These items won't get used be set used to set any properties on the final content so are effective as a means
+of deleting parts of the html.
+TAL expressions are evaluated after XPath expressions so we can post process the _text XPath to produce a text
+stripped of a certan id.
+
+
+
+
+
+
 transmogrify.htmlcontentextractor.auto
 --------------------------------------
 This blueprint will analyse the html and attempt to discover the rules to extract out the
-title, description and body of the html
+title, description and body of the html.
+
+If the logger output is in DEBUG mode then the XPaths used by the auto extrator will be output
+to the logger.
 
