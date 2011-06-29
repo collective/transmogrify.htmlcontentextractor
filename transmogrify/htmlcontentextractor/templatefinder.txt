@@ -7,18 +7,18 @@ analysis
 transmogrify.htmlcontentextractor
 ---------------------------------
 
-The blueprint transmogrify.htmlcontentextractor takes rules of the following form
+You can define a series of rules which will get applied to the to the '_text'
+of the input item. The rules use a XPATH expression or a TAL expression to
+extract html or text out of the html and adds it as key to the outputted item.
 
-(N-)field = (optional)(text|html|delete|optional) xpath
+Each option of the blueprint is a rule of the following form ::
 
-OR
+    (N-)field = (optional)(text|html|delete|optional) xpath
 
-(N-)field = (optional)tal tal-expression
+    OR
 
+    (N-)field = (optional)tal tal-expression
 
-N is the group number. Groups are run in order of group number. If
-any rule doesn't match (unless its marked optional) then the next group
-will be tried instead. Group numbers are optional
 
 "field" is the attribute that will be set with the results of the xpath
 
@@ -33,25 +33,34 @@ is evaluated on the item object AFTER the XPath expressions have been applied.
 
 For example ::
 
-[template]
-blueprint = transmogrify.htmlcontentextractor
-title = text //div[@class='body']//h1[1]
-_permalink = text //div[@class='body']//a[@class='headerlink']
-_text = html //div[@class='body']
-_label = optional //p[contains(@class,'admonition-title')]
-description = optional //div[contains(@class,'admonition-description')]/p[@class='last']/text()
-_remove_useless_links = optional //div[@id = 'indices-and-tables']
-mimetype = tal string:text/html
-text = tal python:item['_text'].replace('id="blah"','')
+    [template]
+    blueprint = transmogrify.htmlcontentextractor
+    title = text //div[@class='body']//h1[1]
+    _permalink = text //div[@class='body']//a[@class='headerlink']
+    _text = html //div[@class='body']
+    _label = optional //p[contains(@class,'admonition-title')]
+    description = optional //div[contains(@class,'admonition-description')]/p[@class='last']/text()
+    _remove_useless_links = optional //div[@id = 'indices-and-tables']
+    mimetype = tal string:text/html
+    text = tal python:item['_text'].replace('id="blah"','')
 
-We delete a number of parts of the html by extracting content to fields such as _permalink and _label.
+You can delete a number of parts of the html by extracting content to fields such as _permalink and _label.
 These items won't get used be set used to set any properties on the final content so are effective as a means
 of deleting parts of the html.
 TAL expressions are evaluated after XPath expressions so we can post process the _text XPath to produce a text
 stripped of a certain id.
 
 
+N is the group number. Groups are run in order of group number. If
+any rule doesn't match (unless its marked optional) then the next group
+will be tried instead. Group numbers are optional.
 
+Instead of groups you can also chain several blueprints togeather. The blueprint
+will set '_template' on the item. If another blueprint finds the '_template' key in an item
+it will ignore that item.
+
+The '_template' field is the remainder of the html once all the content selected by the
+XPATH expressions have been applied.
 
 
 
