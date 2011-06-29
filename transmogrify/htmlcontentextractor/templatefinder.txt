@@ -48,7 +48,7 @@ We delete a number of parts of the html by extracting content to fields such as 
 These items won't get used be set used to set any properties on the final content so are effective as a means
 of deleting parts of the html.
 TAL expressions are evaluated after XPath expressions so we can post process the _text XPath to produce a text
-stripped of a certan id.
+stripped of a certain id.
 
 
 
