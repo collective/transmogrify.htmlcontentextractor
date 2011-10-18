@@ -187,24 +187,33 @@ class TemplateFinder(object):
             return False
         extracted = {}
         # we will pull selected nodes out of tree so data isn't repeated
+        #
         for field, nodes in unique.items():
             for format, node in nodes:
                 if getattr(node, 'drop_tree', None) is not None:
                     node.drop_tree()
                 else:
-                    #TODO _ElementStringResult' can't use drop_tree 
+                    #TODO _ElementStringResult' can't use drop_tree
                     pass
 
         for field, nodes in unique.items():
             for format, node in nodes:
                 extracted.setdefault(field,'')
                 format = format.lower().replace('optional','')
+                
                 if format in ['delete']:
                     continue
                 if format in ['text']:
-                    extracted[field] += etree.tostring(node, method='text', encoding=unicode, with_tail=False) + ' '
+                    if isinstance(node, lxml.html.HtmlElement):
+                        extracted[field] += etree.tostring(node, method='text', encoding=unicode, with_tail=False) + ' '
+                    else:
+                        return unicode(node).strip()
                 else:
-                    extracted[field] += etree.tostring(node, method='html', encoding=unicode)
+                    if isinstance(node, lxml.html.HtmlElement):
+                        extracted[field] += etree.tostring(node, method='html', encoding=unicode)
+                    else:
+                        return unicode(node).strip()
+
         # What was this code for?
         #for field, nodes in unique.items():
         #    for format, node in nodes:
@@ -248,21 +257,40 @@ class TemplateFinder(object):
                   return None
 
 
+def iterancestors(e):
+    """ special interation to handle text elements """
+
+    if isinstance(e, lxml.html.HtmlElement):
+        for ancestor in e.iterancestors():
+            yield ancestor
+
+    else:
+        parent = e.getparent()
+        yield parent
+        for ancestor in iterancestors(parent):
+            yield ancestor
+
+        
+
+
 
 def nonoverlap(unique, new):
     """ return the elements which aren't descentants of each other """
     for format,e1 in new:
+
         #if e1 is an ascendant then replace
         add = True
         for f,e in unique:
-            if e1 in [n for n in e.iterancestors()]:
+            if e1 in [n for n in iterancestors(e)]:
                 unique.remove((f,e))
         #if e1 is an descendant don't use it
-            if e in [n for n in e1.iterancestors()]:
+            if e in [n for n in iterancestors(e1)]:
                 add = False
                 break
+
         if add:
             unique.append((format,e1))
+
     return unique
 
 
