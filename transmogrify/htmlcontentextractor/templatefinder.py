@@ -122,14 +122,21 @@ class TemplateFinder(object):
 
     def __iter__(self):
         notextracted = []
+        total = 0
+        skipped = 0
         for item in self.previous:
+            total += 1
             content = self.getHtml(item)
+            path = item.get('_path','')
             if content is None:
                 #log.warning('(%s) content is None'%item['_path'])
+                skipped += 1
+                if path:
+                    self.logger.debug("SKIP: %s (no html)"%(path))
                 yield item
                 continue
             path = item['_site_url'] + item['_path']
-            
+
             # try each group in turn to see if they work
             gotit = False
             for groupname in sorted(self.groups.keys()):
@@ -144,18 +151,22 @@ class TemplateFinder(object):
                 notextracted.append(item)
         for item in notextracted:
             yield item
+        self.logger.info("extracted %d/%d/%d"%(total-len(notextracted)-skipped,
+                                               total-skipped,
+                                               total))
 
 
     def extract(self, pats, tree, item):
         unique = {}
         nomatch = []
         optional = []
+        if '_template' in item:
+            # don't apply the template if another has already been applied
+            self.logger.debug("SKIP: %s (already extracted)"%(item['_path']))
+            return
         for field, xps in pats.items():
             if field == 'path':
                 continue
-            if '_template' in item:
-                # don't apply the template if another has already been applied
-                return
             for format, xp in xps:
                 if format.lower() == 'tal':
                     continue
@@ -186,14 +197,19 @@ class TemplateFinder(object):
                                                              matched, unmatched) )
             return False
         extracted = {}
+        assert unique
         # we will pull selected nodes out of tree so data isn't repeated
+
         for field, nodes in unique.items():
             for format, node in nodes:
                 if getattr(node, 'drop_tree', None) is not None:
-                    node.drop_tree()
+                    try:
+                        node.drop_tree()
+                    except:
+                        self.logger.error("error in drop_tree %s=%s"%(field,etree.tostring(node, method='html', encoding=unicode)))
                 else:
                     #TODO _ElementStringResult' can't use drop_tree 
-                    pass
+                    pass 
 
         for field, nodes in unique.items():
             for format, node in nodes:
@@ -204,7 +220,11 @@ class TemplateFinder(object):
                 if not getattr(node, 'iterancestors', None):
                     extracted[field] = unicode(node)
                 elif format in ['text']:
-                    extracted[field] += etree.tostring(node, method='text', encoding=unicode, with_tail=False) + ' '
+                    value = etree.tostring(node, method='text', encoding=unicode, with_tail=False)
+                    if extracted[field]:
+                        extracted[field] += ' ' + value
+                    else:
+                        extracted[field] += value
                 else:
                     extracted[field] += etree.tostring(node, method='html', encoding=unicode)
         # What was this code for?
@@ -263,15 +283,17 @@ def nonoverlap(unique, new):
     for format,e1 in new:
         #if e1 is an ascendant then replace
         add = True
+        toremove = []
         for f,e in unique:
-            if e1 in [n for n in ancestors(e)]:
-                unique.remove((f,e))
-        #if e1 is an descendant don't use it
-            if e in [n for n in ancestors(e1)]:
+            if e1 in set(ancestors(e)):
+                toremove.append((f,e))
+            if e in set(ancestors(e1)):
                 add = False
                 break
         if add:
             unique.append((format,e1))
+        for pair in toremove:
+            unique.remove(pair)
     return unique
 
 
