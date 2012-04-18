@@ -91,8 +91,6 @@ class TemplateFinder(object):
 
     def __init__(self, transmogrifier, name, options, previous):
         self.previous = previous
-        self.auto = options.get('auto', True)
-        self.auto = self.auto in ['True','true','yes','Y']
         self.groups = {}
         self.name = name
         self.logger = logging.getLogger(name)
