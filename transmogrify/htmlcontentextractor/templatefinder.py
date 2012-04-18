@@ -16,6 +16,7 @@ import lxml.html
 import lxml.html.soupparser
 import lxml.etree
 from collective.transmogrifier.utils import Expression
+import datetime
 
 from StringIO import StringIO
 from sys import stderr
@@ -113,7 +114,7 @@ class TemplateFinder(object):
             for line in value.strip().split('\n'):
                 xp = line.strip()
                 if format.lower() == 'tal':
-                    xp = Expression(xp, transmogrifier, name, options)
+                    xp = Expression(xp, transmogrifier, name, options, datetime=datetime)
                 xps.append((format,xp))
             group = self.groups.setdefault(group, {})
             group[field] = xps
@@ -202,14 +203,15 @@ class TemplateFinder(object):
 
         for field, nodes in unique.items():
             for format, node in nodes:
-                if getattr(node, 'drop_tree', None) is not None:
-                    try:
-                        node.drop_tree()
-                    except:
-                        self.logger.error("error in drop_tree %s=%s"%(field,etree.tostring(node, method='html', encoding=unicode)))
-                else:
-                    #TODO _ElementStringResult' can't use drop_tree 
-                    pass 
+                if getattr(node, 'drop_tree', None) is None:
+                    continue
+                if not node.getparent():
+                    continue
+                try:
+                    node.drop_tree()
+                except:
+#                    import pdb; pdb.set_trace()
+                    self.logger.error("error in drop_tree %s=%s"%(field,etree.tostring(node, method='html', encoding=unicode)))
 
         for field, nodes in unique.items():
             for format, node in nodes:
