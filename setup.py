@@ -8,7 +8,7 @@ setup(name='transmogrify.htmlcontentextractor',
       description="This blueprint extracts out title, description and body from html "
                 "either via xpath or by automatic cluster analysis",
       long_description=open('README.rst').read() + '\n'+
-                       open(os.path.join("transmogrify", "htmlcontentextractor", "templatefinder.txt")).read() + "\n" +
+#                       open(os.path.join("transmogrify", "htmlcontentextractor", "templatefinder.txt")).read() + "\n" +
                        open(os.path.join("docs", "HISTORY.txt")).read(),
       # Get more strings from http://www.python.org/pypi?%3Aaction=list_classifiers
       classifiers=[
