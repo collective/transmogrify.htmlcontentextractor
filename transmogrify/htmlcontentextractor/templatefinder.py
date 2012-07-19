@@ -17,6 +17,7 @@ import lxml.html.soupparser
 import lxml.etree
 from collective.transmogrifier.utils import Expression
 import datetime
+from collections import OrderedDict
 
 from StringIO import StringIO
 from sys import stderr
@@ -94,10 +95,19 @@ class TemplateFinder(object):
         self.groups = {}
         self.name = name
         self.logger = logging.getLogger(name)
+        order = options.get('_order','').split()
+        def specialkey(key):
+            if key in ['blueprint','debug','_order']:
+                return True
+            if key in order:
+                return True
+            if key.startswith('@'):
+                return True
+            return False
+        keys = order + [k for k in options.keys() if not specialkey(k)]
 
-        for key, value in options.items():
-            if key in ['blueprint','debug'] or key.startswith('@'):
-                continue
+        for key in keys:
+            value = options[key]
             try:
                 group, field = key.split('-', 1)
                 group = int(group)
@@ -114,7 +124,7 @@ class TemplateFinder(object):
                 if format.lower() == 'tal':
                     xp = Expression(xp, transmogrifier, name, options, datetime=datetime)
                 xps.append((format,xp))
-            group = self.groups.setdefault(group, {})
+            group = self.groups.setdefault(group, OrderedDict())
             group[field] = xps
 
 
@@ -148,15 +158,16 @@ class TemplateFinder(object):
                 yield item
             else:
                 notextracted.append(item)
-        for item in notextracted:
-            yield item
+                yield item
+#        for item in notextracted:
+#            yield item
         self.logger.info("extracted %d/%d/%d"%(total-len(notextracted)-skipped,
                                                total-skipped,
                                                total))
 
 
     def extract(self, pats, tree, item):
-        unique = {}
+        unique = OrderedDict()
         nomatch = []
         optional = []
         if '_template' in item:
@@ -200,16 +211,20 @@ class TemplateFinder(object):
         # we will pull selected nodes out of tree so data isn't repeated
 
         for field, nodes in unique.items():
+            toremove = []
             for format, node in nodes:
                 if getattr(node, 'drop_tree', None) is None:
                     continue
                 if not node.getparent():
+                    # already dropped
+                    toremove.append((format,node))
                     continue
                 try:
                     node.drop_tree()
                 except:
-#                    import pdb; pdb.set_trace()
                     self.logger.error("error in drop_tree %s=%s"%(field,etree.tostring(node, method='html', encoding=unicode)))
+            for node in toremove:
+                nodes.remove(node)
 
         for field, nodes in unique.items():
             for format, node in nodes:
@@ -285,9 +300,11 @@ def nonoverlap(unique, new):
         add = True
         toremove = []
         for f,e in unique:
-            if e1 in set(ancestors(e)):
+            if e1 == e:
                 toremove.append((f,e))
-            if e in set(ancestors(e1)):
+            elif e1 in set(ancestors(e)):
+                toremove.append((f,e))
+            elif e in set(ancestors(e1)):
                 add = False
                 break
         if add:
