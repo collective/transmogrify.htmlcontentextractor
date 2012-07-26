@@ -133,6 +133,8 @@ class TemplateFinder(object):
         notextracted = []
         total = 0
         skipped = 0
+        alreadymatched = 0
+        stats = {}
         for item in self.previous:
             total += 1
             content = self.getHtml(item)
@@ -144,6 +146,12 @@ class TemplateFinder(object):
                     self.logger.debug("SKIP: %s (no html)"%(path))
                 yield item
                 continue
+            if '_template' in item:
+                # don't apply the template if another has already been applied
+                alreadymatched += 1
+                self.logger.debug("SKIP: %s (already extracted)"%(item['_path']))
+                yield item
+                continue
             path = item['_site_url'] + item['_path']
 
             # try each group in turn to see if they work
@@ -151,7 +159,7 @@ class TemplateFinder(object):
             for groupname in sorted(self.groups.keys()):
                 group = self.groups[groupname]
                 tree = lxml.html.fromstring(content)
-                if group.get('path', path) == path and self.extract(group, tree, item):
+                if group.get('path', path) == path and self.extract(group, tree, item, stats):
                     gotit = True
                     break
             if gotit:
@@ -161,19 +169,16 @@ class TemplateFinder(object):
                 yield item
 #        for item in notextracted:
 #            yield item
-        self.logger.info("extracted %d/%d/%d"%(total-len(notextracted)-skipped,
-                                               total-skipped,
-                                               total))
+        self.logger.info("extracted %d/%d/%d/%d %s"%(total-len(notextracted)-alreadymatched-skipped,
+                                                  total-alreadymatched-skipped,
+                                                  total-skipped,
+                                                  total, stats))
 
 
-    def extract(self, pats, tree, item):
+    def extract(self, pats, tree, item, stats):
         unique = OrderedDict()
         nomatch = []
         optional = []
-        if '_template' in item:
-            # don't apply the template if another has already been applied
-            self.logger.debug("SKIP: %s (already extracted)"%(item['_path']))
-            return
         for field, xps in pats.items():
             if field == 'path':
                 continue
@@ -265,8 +270,11 @@ class TemplateFinder(object):
                 extracted[field] = extracted.get(field, '') + value
         item.update(extracted)
 
+
         unmatched = set([field for field,xp in optional])
         matched = set(unique.keys()) - set(unmatched)
+        for field in matched:
+            stats[field] = stats.get(field,0) + 1
         self.logger.info( "PASS: '%s' matched=%s, unmatched=%s", item['_path'], list(matched) , list(unmatched))
         if '_tree' in item:
             del item['_tree']
