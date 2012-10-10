@@ -157,19 +157,27 @@ class TemplateFinder(object):
                 child_content = etree.tostring(node)
                 child_tree = lxml.html.fromstring(child_content)
                 child_paths = child_tree.xpath(self.apply_to_paths, namespaces=ns)
-                #child_branch = node.xpath(self.apply_to_paths, namespaces=ns)
-                pseudo_item = dict(_path=item["_path"], _mimetype="text/html", _content=child_content, _site_url=item["_site_url"])
-                results = self.process_items([pseudo_item])
-                children = []
 
-                for result in results:
-                    children.append(result)
+                for path in child_paths:
+                    # TODO: Better path normalization, eg: http://example.com/123.asp
+                    path = path.strip("/")
 
-                if children and len(children) == 1 and '_template' in children[0]:
-                    for child_path in child_paths:
-                        # TODO: Better path normalization, eg: http://example.com/123.asp
-                        if child_path.startswith("/"):
-                            collected_pseudo_items[child_path.strip("/")] = children[0]
+                    pseudo_item = collected_pseudo_items.get(
+                        path,
+                        dict(
+                            _path=path,
+                            _mimetype="text/html",
+                            _site_url=item["_site_url"]
+                                )
+                        )
+
+                    pseudo_item["_content"] = child_content
+
+                    list(self.process_items([pseudo_item]))
+
+                    if "_template" in pseudo_item:
+                        del pseudo_item["_template"]
+                        collected_pseudo_items[path] = pseudo_item
 
         # {"/topics/2030.asp": {'description': 'smoking', ...}}
         # [{"title": "smoking", "_path" : "/topics/2030.asp", ...}, ...]

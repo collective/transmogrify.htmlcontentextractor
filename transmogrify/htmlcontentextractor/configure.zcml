@@ -12,9 +12,4 @@
     <utility component=".autofinder.AutoFinder"
              name="transmogrify.htmlcontentextractor.auto" />
 
-<!--
-    <utility component=".discoverattribute.DiscoverAttributes"
-             name="transmogrify.htmlcontentextractor.discoverattributes" />
-	     -->
-
 </configure>
