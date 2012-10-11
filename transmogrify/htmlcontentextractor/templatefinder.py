@@ -141,52 +141,65 @@ class TemplateFinder(object):
            Optionally splitting content by _match
         """
         site_items = []
+        site_items_lookup = {}
         collected_pseudo_items = {}
 
+        # read in all items
         for item in self.previous:
             site_items.append(item)
+            site_items_lookup[item.get('_path')] = item
+
+
+        # find fragments in items
+        for item in site_items:
+
             content = self.getHtml(item)
             if content is None:
                 continue
-
+            
             tree = lxml.html.fromstring(content)
-            nodes = tree.xpath(self.match, namespaces=ns)
 
             # item attribute: _site_url, content, mimetype
-            for node in nodes:
-                child_content = etree.tostring(node)
-                child_tree = lxml.html.fromstring(child_content)
-                child_paths = child_tree.xpath(self.apply_to_paths, namespaces=ns)
+            for fragment in tree.xpath(self.match, namespaces=ns):
 
-                for path in child_paths:
+                fragment_content = etree.tostring(fragment)
+                fragment_tree = lxml.html.fromstring(fragment_content)
+
+                # get each item in the path selection and process with fragment_content
+                for target_path in fragment_tree.xpath (self.apply_to_paths, namespaces=ns):
                     # TODO: Better path normalization, eg: http://example.com/123.asp
-                    path = path.strip("/")
+                    target_path = target_path.strip("/")
 
-                    pseudo_item = collected_pseudo_items.get(
-                        path,
-                        dict(
-                            _path=path,
-                            _mimetype="text/html",
-                            _site_url=item["_site_url"]
-                                )
-                        )
+                    if target_path not in site_items_lookup:
+                        # TODO: should implement an option to create new content
+                        continue
 
-                    pseudo_item["_content"] = child_content
+                    target_item = site_items_lookup[target_path]
 
-                    list(self.process_items([pseudo_item]))
+                    # save _content, _mimetype and _template
+                    NOTSET = object()
+                    target_content = target_item.get("_content", NOTSET)
+                    target_mimetype = target_item.get("_content", NOTSET)
 
-                    if "_template" in pseudo_item:
-                        del pseudo_item["_template"]
-                        collected_pseudo_items[path] = pseudo_item
+                    # set to tempory values during process_items
+                    target_item["_content"] = fragment_content
+                    target_item["_mimetype"] = "text/html"
 
-        # {"/topics/2030.asp": {'description': 'smoking', ...}}
-        # [{"title": "smoking", "_path" : "/topics/2030.asp", ...}, ...]
+                    list( self.process_items([target_item]) )
+
+                    # reset to original values
+                    target_item["_content"] = target_content
+                    target_item["_mimetype"] = target_mimetype
+
+                    for key in ["_content", "_mimetype"]:
+                        if target_item[key] == NOTSET:
+                            del target_item[key]
+
+
         for item in site_items:
-            path = item.get("_path", "")
-            if path in collected_pseudo_items:
-                #import pdb; pdb.set_trace()
-                item.update(collected_pseudo_items[path])
             yield item
+
+
 
     def process_items(self, items):
         """Process items from basic template"""
@@ -273,7 +286,7 @@ class TemplateFinder(object):
                                                              matched, unmatched))
             return False
         extracted = {}
-        assert unique
+        #assert unique
         # we will pull selected nodes out of tree so data isn't repeated
 
         for field, nodes in unique.items():
