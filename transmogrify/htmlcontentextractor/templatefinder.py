@@ -1,3 +1,4 @@
+import re
 #import fnmatch
 from zope.interface import classProvides
 from zope.interface import implements
@@ -159,13 +160,12 @@ class TemplateFinder(object):
             
             tree = lxml.html.fromstring(content)
 
-            # item attribute: _site_url, content, mimetype
             for fragment in tree.xpath(self.match, namespaces=ns):
 
                 fragment_content = etree.tostring(fragment)
                 fragment_tree = lxml.html.fromstring(fragment_content)
 
-                # get each item in the path selection and process with fragment_content
+                # get each target_item in the path selection and process with fragment_content
                 for target_path in fragment_tree.xpath (self.apply_to_paths, namespaces=ns):
                     # TODO: Better path normalization, eg: http://example.com/123.asp
                     target_path = target_path.strip("/")
@@ -184,6 +184,7 @@ class TemplateFinder(object):
                     # set to tempory values during process_items
                     target_item["_content"] = fragment_content
                     target_item["_mimetype"] = "text/html"
+                    target_item["_metaitem"] = item
 
                     list( self.process_items([target_item]) )
 
@@ -286,7 +287,7 @@ class TemplateFinder(object):
                                                              matched, unmatched))
             return False
         extracted = {}
-        #assert unique
+        assert unique
         # we will pull selected nodes out of tree so data isn't repeated
 
         for field, nodes in unique.items():
@@ -340,7 +341,7 @@ class TemplateFinder(object):
             for format, tal in xps:
                 if format.lower() != 'tal':
                     continue
-                value = tal(item)
+                value = tal(item, re=re)
                 extracted[field] = extracted.get(field, '') + value
         item.update(extracted)
 
