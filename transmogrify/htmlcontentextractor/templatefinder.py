@@ -95,9 +95,12 @@ class TemplateFinder(object):
         order = options.get('_order', '').split()
         self.match = options.get('_match', '/').strip()
         self.apply_to_paths = options.get('_apply_to_paths', '').strip()
+        self.act_as_filter = {
+                    "yes": True, "true": True, "no": False, "false": False
+                }[options.get('_act_as_filter', "No").lower()]
 
         def specialkey(key):
-            if key in ['blueprint', 'debug', '_order', '_match', '_apply_to_paths']:
+            if key in ['blueprint', 'debug', '_order', '_match', '_apply_to_paths', "_act_as_filter"]:
                 return True
             if key in order:
                 return True
@@ -221,7 +224,7 @@ class TemplateFinder(object):
                     self.logger.debug("SKIP: %s (no html)" % (path))
                 yield item
                 continue
-            if '_template' in item:
+            if not self.act_as_filter and '_template' in item:
                 # don't apply the template if another has already been applied
                 alreadymatched += 1
                 self.logger.debug("SKIP: %s (already extracted)" % (item['_path']))
@@ -352,7 +355,9 @@ class TemplateFinder(object):
         self.logger.info("PASS: '%s' matched=%s, unmatched=%s", item['_path'], list(matched), list(unmatched))
         if '_tree' in item:
             del item['_tree']
-        item['_template'] = None
+        if not self.act_as_filter:
+            item['_template'] = None
+
         return item
 
     def getHtml(self, item):
