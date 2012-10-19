@@ -57,8 +57,6 @@ yle="mso-bidi-font-weight:normal"><span lang="EN-AU" style="font-size:16.0pt">Ca
 """
 
 ns = {'re': "http://exslt.org/regular-expressions"}
-
-import re
 attr = re.compile(r':(?P<attr>[^/:]*)=(?P<val>[^/:]*)')
 
 
@@ -95,12 +93,13 @@ class TemplateFinder(object):
         order = options.get('_order', '').split()
         self.match = options.get('_match', '/').strip()
         self.apply_to_paths = options.get('_apply_to_paths', '').strip()
-        self.act_as_filter = {
-                    "yes": True, "true": True, "no": False, "false": False
-                }[options.get('_act_as_filter', "No").lower()]
+        self.apply_to_paths_prefix = options.get('_apply_to_paths_prefix', '').strip("/")
+        self.act_as_filter = options.get('_act_as_filter', "No").lower() in ('yes', 'true')
+        self.generate_missing = options.get('_generate_missing', "No").lower() in ('yes', 'true')
 
         def specialkey(key):
-            if key in ['blueprint', 'debug', '_order', '_match', '_apply_to_paths', "_act_as_filter"]:
+            if key in ['blueprint', 'debug', '_order', '_match',
+                '_apply_to_paths', '_apply_to_paths_prefix', '_act_as_filter', '_generate_missing']:
                 return True
             if key in order:
                 return True
@@ -146,21 +145,22 @@ class TemplateFinder(object):
         """
         site_items = []
         site_items_lookup = {}
-        collected_pseudo_items = {}
+        #collected_pseudo_items = {}
 
         # read in all items
         for item in self.previous:
             site_items.append(item)
             site_items_lookup[item.get('_path')] = item
 
-
         # find fragments in items
+        items_to_yield = []
         for item in site_items:
+            items_to_yield.append(item)
 
             content = self.getHtml(item)
             if content is None:
                 continue
-            
+
             tree = lxml.html.fromstring(content)
 
             for fragment in tree.xpath(self.match, namespaces=ns):
@@ -169,7 +169,81 @@ class TemplateFinder(object):
                 fragment_tree = lxml.html.fromstring(fragment_content)
 
                 # get each target_item in the path selection and process with fragment_content
-                for target_path in fragment_tree.xpath (self.apply_to_paths, namespaces=ns):
+                for target_path in fragment_tree.xpath(self.apply_to_paths, namespaces=ns):
+                    # TODO: Better path normalization, eg: http://example.com/123.asp
+                    target_path = target_path.strip("/")
+                    if len(self.apply_to_paths_prefix) > 0:
+                        target_path = self.apply_to_paths_prefix + "/" + target_path
+
+                    if target_path not in site_items_lookup:
+                        if self.generate_missing:
+                            target_item = {
+                                "_path": target_path,
+                                "_site_url": item["_site_url"],
+                                "_template_generated": True
+                            }
+                        else:
+                            continue
+                    else:
+                        target_item = site_items_lookup[target_path]
+
+                    # save _content, _mimetype and _template
+                    NOTSET = object()
+                    target_content = target_item.get("_content", NOTSET)
+                    target_mimetype = target_item.get("_content", NOTSET)
+
+                    # set to tempory values during process_items
+                    target_item["_content"] = fragment_content
+                    target_item["_mimetype"] = "text/html"
+                    target_item["_metaitem"] = item
+
+                    list(self.process_items([target_item]))
+
+                    # reset to original values
+                    target_item["_content"] = target_content
+                    target_item["_mimetype"] = target_mimetype
+
+                    for key in ["_content", "_mimetype"]:
+                        if target_item[key] == NOTSET:
+                            del target_item[key]
+
+                    if target_item.get("_template_generated") and "_template" in target_item:
+                        site_items_lookup[target_path] = target_item
+                        items_to_yield.append(target_item)
+
+        for item in items_to_yield:
+            yield item
+
+    def attribute_to_folders(self):
+        """Process items applying attributes to different item based on _apply_to_folders
+           Optionally splitting content by _match
+        """
+        import pdb; pdb.set_trace()
+        site_items = []
+        site_items_lookup = {}
+        the_folder = self.apply_to_folders.rstrip("/").rsplit("/", 1)[0]
+
+        # read in all items
+        for item in self.previous:
+            site_items.append(item)
+            site_items_lookup[item.get('_path')] = item
+
+        # find fragments in items
+        for item in site_items:
+
+            content = self.getHtml(item)
+            if content is None:
+                continue
+
+            tree = lxml.html.fromstring(content)
+
+            for fragment in tree.xpath(self.match, namespaces=ns):
+
+                fragment_content = etree.tostring(fragment)
+                fragment_tree = lxml.html.fromstring(fragment_content)
+
+                # get each target_item in the path selection and process with fragment_content
+                for target_path in fragment_tree.xpath(the_folder, namespaces=ns):
                     # TODO: Better path normalization, eg: http://example.com/123.asp
                     target_path = target_path.strip("/")
 
@@ -189,7 +263,7 @@ class TemplateFinder(object):
                     target_item["_mimetype"] = "text/html"
                     target_item["_metaitem"] = item
 
-                    list( self.process_items([target_item]) )
+                    list(self.process_items([target_item]))
 
                     # reset to original values
                     target_item["_content"] = target_content
@@ -199,11 +273,8 @@ class TemplateFinder(object):
                         if target_item[key] == NOTSET:
                             del target_item[key]
 
-
         for item in site_items:
             yield item
-
-
 
     def process_items(self, items):
         """Process items from basic template"""
