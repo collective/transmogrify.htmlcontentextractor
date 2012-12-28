@@ -22,6 +22,39 @@ from sys import stderr
 
 import logging
 
+"""
+transmogrify.htmlcontentextractor.auto
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+This blueprint has a clustering algorithm that tries to automatically extract the content from the HTML template.
+This is slow and not always effective. Often you will need to input your own template extraction rules.
+In addition to extracting Title, Description and Text of items the blueprint will output
+the rules it generates to a logger with the same name as the blueprint.
+
+Setting debug mode on templateauto will give you details about the rules it uses. ::
+
+  ...
+  DEBUG:templateauto:'icft.html' discovered rules by clustering on 'http://...'
+  Rules:
+	text= html //div[@id = "dal_content"]//div[@class = "content"]//p
+	title= text //div[@id = "dal_content"]//div[@class = "content"]//h3
+  Text:
+	TITLE: ...
+	MAIN-10: ...
+	MAIN-10: ...
+	MAIN-10: ...
+
+Options
+-------
+
+condition
+  TAL Expression to control use of this blueprint
+
+debug
+  default is ''
+
+"""
+
 
 #patch LayoutCluster to make it LayoutPattern
 def match_blocks(self, blocks0, strict=True):

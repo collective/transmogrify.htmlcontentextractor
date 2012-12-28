@@ -1,13 +1,22 @@
 from setuptools import setup, find_packages
 import os
+import re
 
 version = '1.1'
+
+
+def docstring(file):
+    py = open(os.path.join("transmogrify", "htmlcontentextractor", file)).read()
+    return re.findall('"""(.*?)"""', py, re.DOTALL)[0]
+
 
 setup(name='transmogrify.htmlcontentextractor',
       version=version,
       description="This blueprint extracts out title, description and body from html "
                 "either via xpath or by automatic cluster analysis",
       long_description=open('README.rst').read() + '\n'+
+                        docstring('templatefinder.py') + \
+                        docstring('autofinder.py') + \
 #                       open(os.path.join("transmogrify", "htmlcontentextractor", "templatefinder.txt")).read() + "\n" +
                        open(os.path.join("docs", "HISTORY.txt")).read(),
       # Get more strings from http://www.python.org/pypi?%3Aaction=list_classifiers

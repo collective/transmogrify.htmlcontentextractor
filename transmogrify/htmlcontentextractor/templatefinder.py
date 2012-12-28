@@ -1,16 +1,8 @@
 import re
-#import fnmatch
 from zope.interface import classProvides
 from zope.interface import implements
 from collective.transmogrifier.interfaces import ISectionBlueprint
 from collective.transmogrifier.interfaces import ISection
-#from collective.transmogrifier.utils import Matcher
-
-#from webstemmer.analyze import PageFeeder, LayoutAnalyzer, LayoutCluster
-#from webstemmer.extract import TextExtractor, LayoutPatternSet, LayoutPattern
-#from webstemmer.layoutils import sigchars, get_textblocks, retrieve_blocks, WEBSTEMMER_VERSION, KEY_ATTRS
-#from webstemmer.zipdb import ACLDB
-#from webstemmer.htmldom import parse
 from lxml import etree
 import lxml.html
 import lxml.html.soupparser
@@ -18,43 +10,81 @@ import lxml.etree
 from collective.transmogrifier.utils import Expression
 import datetime
 from collections import OrderedDict
-
-#from StringIO import StringIO
-#from sys import stderr
-
 import logging
 
 """
-XPath Tests
-===========
+transmogrify.htmlcontentextractor
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-We want to take webstemmers patterns and get the actually html rather than just
-the text. To do this we will convert a pattern to xpath
+This blueprint extracts out title, description and body from html
+either via xpath, TAL. This blueprint can either extract fields from a single item, or the item
+could represent a list of data about items linked on different pages.
 
-    >>> pat = 'div:class=section1/p:align=center:class=msonormal/span'
-    >>> xp = toXPath(pat)
-    '//div[re:test(@class,"^section1$","i")]/p[re:test(@align,"^center$","i")][re:test(@class,"^msonormal$","i")]/span'
+The options to blueprint are rules on how to extract the content from the 'text' field.
 
-Lets check it gets the right parts of the text
+Rules are in the form of ::
 
-    >>> text = '<div class="Section1">\n\n<p class="MsoNormal" align="center" style="text-align:center"><b style="mso-bidi-font-weight:
- normal"><span lang="EN-AU" style="font-size:20.0pt"/></b></p>\n\n<p class="MsoNormal" align="center" style="text-align:
-center"><b style="mso-bidi-font-weight: normal"><span lang="EN-AU" style="font-size:20.0pt">Customer Service Standards</
-span></b></p>\n\n<p class="MsoNormal"><span lang="EN-AU"/></p>\n\n<p class="MsoNormal"><span lang="EN-AU"/></p>\n\n<p cl
-ass="MsoNormal"><span lang="EN-AU"/></p>\n\n<p class="MsoNormal" style="margin-top:0cm;margin-right:-23.55pt;margin-bott
-om: 0cm;margin-left:45.1pt;margin-bottom:.0001pt;text-indent:-27.0pt;mso-pagination: none;mso-list:l2 level1 lfo3;tab-st
-ops:list 45.0pt"><b style="mso-bidi-font-weight:normal"><span lang="EN-AU" style="font-size:16.0pt; mso-fareast-font-fam
-ily:Arial"><span style="mso-list:Ignore">1.<span style="font:7.0pt "/>Times New Roman""&gt;\n</span></span></b></p><b st
-yle="mso-bidi-font-weight:normal"><span lang="EN-AU" style="font-size:16.0pt">Care for the customer and show respect for
-\nthem and their property.</span></b></div>'
+  (title|description|text|anything) = (text|html|optional|tal) Expression
 
-    >>> parser = etree.XMLParser(recover=True)
-    >>> tree = etree.parse(StringIO(text), parser)
-    >>> nodes = tree.xpath(xp,namespaces=ns)
-    >>> result = etree.tostring(nodes[0])
+Where expression is either TAL or XPath
+
+For example ::
+
+  [template1]
+  blueprint = transmogrify.htmlcontentextractor
+  title       = text //div[@class='body']//h1[1]
+  _delete1    = optional //div[@class='body']//a[@class='headerlink']
+  _delete2    = optional //div[contains(@class,'admonition-description')]
+  description = text //div[contains(@class,'admonition-description')]//p[@class='last']
+  text        = html //div[@class='body']
+
+Note that for a single template e.g. template1, ALL of the XPaths need to match otherwise
+that template will be skipped and the next template tried. If you'd like to make it
+so that a single XPath isn't nessary for the template to match then use the keyword `optional` or `optionaltext`
+instead of `text` or `html` before the XPath.
+
+
+When an XPath is applied within a single template, the HTML it matches will be removed from the page.
+Another rule in that same template can't match the same HTML fragment.
+
+If a content part is not useful (e.g. redundant text, title or description) it is a way to effectively remove that HTML
+from the content.
+
+To help debug your template rules you can set debug mode.
+
+For more information about XPath see
+
+- http://www.w3schools.com/xpath/default.asp
+- http://blog.browsermob.com/2009/04/test-your-selenium-xpath-easily-with-firebug/
+
+
+
+Options:
+
+:_apply_to_paths:
+  a XPATH which selects a href which links to the item extracted fields should be applied to. If empty current item
+  will be used.
+
+:_apply_to_paths_prefix:
+  if relative urls are being selected by _apply_to_paths, then append this url. TODO: this should go away and standard
+  url relative link processing should occur.
+
+:_match:
+  When using _apply_to_paths, you can optionally just process content within each block selected by this XPATH. If
+  multiple links are found then extracted data is shared by item within the matched item.
+
+:_act_as_filter:
+  .default 'No'. If 'True', any content extracted will be applied to items even if they had previously
+  matched another templatefinder blueprint before this one. Determining if a previous template has already matched is
+  done by checking the existances of the '_template' field which is set on a successful match with the remaining html.
+
+:_generate_missing:
+  default 'No'. When using `_apply_to_paths` and the item refered to by the link doesn't yet exist, create it. Generally
+  this should not be the case as the whole site will be crawled.
 
 
 """
+
 
 ns = {'re': "http://exslt.org/regular-expressions"}
 attr = re.compile(r':(?P<attr>[^/:]*)=(?P<val>[^/:]*)')
@@ -73,18 +103,6 @@ NOTSET = object()
 class TemplateFinder(object):
     classProvides(ISectionBlueprint)
     implements(ISection)
-
-    """ Template finder will associate groups take groups of xpaths and try to extract
-    field information using them. If any xpath fails for a given group then none of the
-    extracted text in that group is used and the next xpath is tried. The last group to
-    be tried is an automatic group made up of xpaths analysed by clustering the pages
-    Format for options is
-
-    1-content = text //div
-    2-content = html //div
-    1-title = text //h1
-    2-title = html //h2
-    """
 
     def __init__(self, transmogrifier, name, options, previous):
         self.previous = previous
@@ -219,7 +237,6 @@ class TemplateFinder(object):
         """Process items applying attributes to different item based on _apply_to_folders
            Optionally splitting content by _match
         """
-        import pdb; pdb.set_trace()
         site_items = []
         site_items_lookup = {}
         the_folder = self.apply_to_folders.rstrip("/").rsplit("/", 1)[0]
@@ -472,3 +489,36 @@ def nonoverlap(unique, new):
         for pair in toremove:
             unique.remove(pair)
     return unique
+
+
+"""
+XPath Tests
+===========
+
+We want to take webstemmers patterns and get the actually html rather than just
+the text. To do this we will convert a pattern to xpath
+
+    >>> pat = 'div:class=section1/p:align=center:class=msonormal/span'
+    >>> xp = toXPath(pat)
+    '//div[re:test(@class,"^section1$","i")]/p[re:test(@align,"^center$","i")][re:test(@class,"^msonormal$","i")]/span'
+
+Lets check it gets the right parts of the text
+
+    >>> text = '<div class="Section1">\n\n<p class="MsoNormal" align="center" style="text-align:center"><b style="mso-bidi-font-weight:
+ normal"><span lang="EN-AU" style="font-size:20.0pt"/></b></p>\n\n<p class="MsoNormal" align="center" style="text-align:
+center"><b style="mso-bidi-font-weight: normal"><span lang="EN-AU" style="font-size:20.0pt">Customer Service Standards</
+span></b></p>\n\n<p class="MsoNormal"><span lang="EN-AU"/></p>\n\n<p class="MsoNormal"><span lang="EN-AU"/></p>\n\n<p cl
+ass="MsoNormal"><span lang="EN-AU"/></p>\n\n<p class="MsoNormal" style="margin-top:0cm;margin-right:-23.55pt;margin-bott
+om: 0cm;margin-left:45.1pt;margin-bottom:.0001pt;text-indent:-27.0pt;mso-pagination: none;mso-list:l2 level1 lfo3;tab-st
+ops:list 45.0pt"><b style="mso-bidi-font-weight:normal"><span lang="EN-AU" style="font-size:16.0pt; mso-fareast-font-fam
+ily:Arial"><span style="mso-list:Ignore">1.<span style="font:7.0pt "/>Times New Roman""&gt;\n</span></span></b></p><b st
+yle="mso-bidi-font-weight:normal"><span lang="EN-AU" style="font-size:16.0pt">Care for the customer and show respect for
+\nthem and their property.</span></b></div>'
+
+    >>> parser = etree.XMLParser(recover=True)
+    >>> tree = etree.parse(StringIO(text), parser)
+    >>> nodes = tree.xpath(xp,namespaces=ns)
+    >>> result = etree.tostring(nodes[0])
+
+
+"""
