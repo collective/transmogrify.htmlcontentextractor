@@ -70,6 +70,7 @@ def toXPath(pat):
 
 default_charset = 'utf-8'
 
+NOTSET = object()
 
 class TemplateFinder(object):
     classProvides(ISectionBlueprint)
@@ -131,10 +132,10 @@ class TemplateFinder(object):
             group[field] = xps
 
     def __iter__(self):
-        iteration = self.attribute_to_item()
         if self.apply_to_paths:
-            iteration = self.attribute_to_paths()
-        return iteration
+            return self.attribute_to_paths()
+        else:
+            return self.attribute_to_item()
 
     def attribute_to_item(self):
         """Process items applying attributes to current item"""
@@ -175,12 +176,12 @@ class TemplateFinder(object):
 
                     if target_path not in site_items_lookup:
                         # TODO: should implement an option to create new content
+                        self.logger.error("'%s' Item not already crawled" % target_path)
                         continue
 
                     target_item = site_items_lookup[target_path]
 
                     # save _content, _mimetype and _template
-                    NOTSET = object()
                     target_content = target_item.get("_content", NOTSET)
                     target_mimetype = target_item.get("_content", NOTSET)
 
