@@ -67,11 +67,47 @@ If one or more of the rules don't match the item will be untouched
 ...   title = //h2/text()
 ...   description = //h3/text()
 ...   text = //p
-... html-key = text
-... remainder-key = _template
 ... """
 
 >>> registerConfig(u'test2', config % dict(html=html, blueprint=blueprint) ); transmogrifier(u'test2')
 [('_path', 'html'),
  ('text',
   '\n<html>\n<head><title>Title</title></head>\n<body>\n<h1 class="description">My description</h1>\n<p>Some <a href="link">text</a></p>\n</body>\n</html>')]
+
+If you wish to allow extraction even when some rules don't match you can make them optional
+
+>>> blueprint = """
+... [template]
+... blueprint = transmogrify.htmlcontentextractor
+... rules =
+...   title = //title/text()
+...   description = optional //h3/text()
+...   text = //p
+... """
+
+>>> registerConfig(u'test3', config % dict(html=html, blueprint=blueprint) ); transmogrifier(u'test3')
+[('_path', 'html'),
+ ('_template',
+  u'<html><head></head><body>\n<h1 class="description">My description</h1>\n\n</body></html>'),
+ ('text', u'<p>Some <a href="link">text</a></p>\n'),
+ ('title', u'Title')]
+
+ You can post process fields using tal expressions
+
+>>> blueprint = """
+... [template]
+... blueprint = transmogrify.htmlcontentextractor
+... rules =
+...   title = //title/text()
+...   description = //h1/text()
+...   text = //p
+... tal =
+...   title = python:item['title'].replace('Title','blah')
+... """
+
+>>> registerConfig(u'test4', config % dict(html=html, blueprint=blueprint) ); transmogrifier(u'test4')
+[('_path', 'html'),
+ ('_template', u'<html><head></head><body>\n\n\n</body></html>'),
+ ('description', u'My description'),
+ ('text', u'<p>Some <a href="link">text</a></p>\n'),
+ ('title', u'blah')]

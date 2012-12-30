@@ -44,10 +44,14 @@ For more information about XPath see
 Options:
 
 :rules:
-  Newline separated list of rules either 'field = tal TAL_EXPRESSION', or
+  Newline separated list of rules either
   'field = XPATH, or 'field = optional XPATH'. Each XPATH must match unless the 'optional' keyword is
   used. Each XPATH removes it's selected nodes from the html and no two XPATHs can select
-  the same html node. TAL expressions are evaluated last so have access to already extracted fields.
+  the same html node.
+
+:tal:
+  Newline separated list of tal expressions of the form 'field = TAL_EXPRESSION'. These act after the
+  the xpaths have been evaluated and have access to any html the xpaths have extracted.
 
 :html-key:
   The field key which contains the html to extract from
@@ -154,6 +158,16 @@ class TemplateFinder(object):
                 xps.append((format, xp))
             group = self.groups.setdefault(group, OrderedDict())
             group[field] = xps
+
+        self.tal = []
+        tal = options.get('tal','')
+        if tal:
+            tal = [[v.strip() for v in line.split('=',1)]
+                     for line in tal.split('\n') if line.strip()]
+            for key,rule in tal:
+                self.tal.append(( key, Expression(rule, transmogrifier, name, options, datetime=datetime)))
+
+
 
     def __iter__(self):
         if self.apply_to_paths:
@@ -445,6 +459,9 @@ class TemplateFinder(object):
                     continue
                 value = tal(item, re=re)
                 extracted[field] = extracted.get(field, '') + value
+        for field, tal in self.tal:
+            value = tal(item, re=re)
+            extracted[field] = value
         item.update(extracted)
 
         unmatched = set([field for field, xp in optional])
