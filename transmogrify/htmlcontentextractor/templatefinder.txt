@@ -7,68 +7,71 @@ analysis
 transmogrify.htmlcontentextractor
 ---------------------------------
 
-You can define a series of rules which will get applied to the to the '_text'
-of the input item. The rules use a XPATH expression or a TAL expression to
-extract html or text out of the html and adds it as key to the outputted item.
+We have a simple html structure we want to break down into title, description and body
 
-Each option of the blueprint is a rule of the following form ::
+>>> html = """
+...  <html>
+...   <head><title>Title</title></head>
+...   <body>
+...     <h1 class="description">My description</h1>
+...     <p>Some <a href="link">text</a></p>
+...   </body>
+...  </html>
+... """
 
-    (N-)field = (optional)(text|html|delete|optional) xpath
+We can use a blueprint like the following to extract a title, description and main body
 
-    OR
+>>> blueprint = """
+... [template]
+... blueprint = transmogrify.htmlcontentextractor
+... rules =
+...   title = //title/text()
+...   description = //h1/text()
+...   text = //p
+... html-key = text
+... remainder-key = _template
+... """
 
-    (N-)field = (optional)tal tal-expression
+Let's put that into a pipeline and run it
 
+>>> config = """
+... [transmogrifier]
+... pipeline =
+...     source
+...     template
+...     printer
+... [source]
+... blueprint = transmogrify.htmlcontentextractor.test.htmlsource
+... html=
+...  %(html)s
+...
+... %(blueprint)s
+...
+... [printer]
+... blueprint = collective.transmogrifier.sections.tests.pprinter
+... """
 
-"field" is the attribute that will be set with the results of the xpath
+>>> registerConfig(u'test1', config % dict(html=html, blueprint=blueprint) ); transmogrifier(u'test1')
+[('_path', 'html'),
+ ('_template', u'<html><head></head><body>\n\n\n</body></html>'),
+ ('description', u'My description'),
+ ('text', u'<p>Some <a href="link">text</a></p>\n'),
+ ('title', u'Title')]
 
-"format" is what to do with the results of the xpath. "optional" means the same
-as "delete" but won't cause the group to not match. if the format is delete or optional
-then the field name doesn't matter but will still need to be unique
+If one or more of the rules don't match the item will be untouched
 
-"xpath' is an xpath expression
+>>> blueprint = """
+... [template]
+... blueprint = transmogrify.htmlcontentextractor
+... rules =
+...   title = //h2/text()
+...   description = //h3/text()
+...   text = //p
+... html-key = text
+... remainder-key = _template
+... """
 
-If the format is 'tal' then instead of an XPath use can use a TAL expression. TAL expression
-is evaluated on the item object AFTER the XPath expressions have been applied.
-
-For example ::
-
-    [template]
-    blueprint = transmogrify.htmlcontentextractor
-    title = text //div[@class='body']//h1[1]
-    _permalink = text //div[@class='body']//a[@class='headerlink']
-    _text = html //div[@class='body']
-    _label = optional //p[contains(@class,'admonition-title')]
-    description = optional //div[contains(@class,'admonition-description')]/p[@class='last']/text()
-    _remove_useless_links = optional //div[@id = 'indices-and-tables']
-    mimetype = tal string:text/html
-    text = tal python:item['_text'].replace('id="blah"','')
-
-You can delete a number of parts of the html by extracting content to fields such as _permalink and _label.
-These items won't get used be set used to set any properties on the final content so are effective as a means
-of deleting parts of the html.
-TAL expressions are evaluated after XPath expressions so we can post process the _text XPath to produce a text
-stripped of a certain id.
-
-
-N is the group number. Groups are run in order of group number. If
-any rule doesn't match (unless its marked optional) then the next group
-will be tried instead. Group numbers are optional.
-
-Instead of groups you can also chain several blueprints togeather. The blueprint
-will set '_template' on the item. If another blueprint finds the '_template' key in an item
-it will ignore that item.
-
-The '_template' field is the remainder of the html once all the content selected by the
-XPATH expressions have been applied.
-
-
-
-transmogrify.htmlcontentextractor.auto
---------------------------------------
-This blueprint will analyse the html and attempt to discover the rules to extract out the
-title, description and body of the html.
-
-If the logger output is in DEBUG mode then the XPaths used by the auto extrator will be output
-to the logger.
-
+>>> registerConfig(u'test2', config % dict(html=html, blueprint=blueprint) ); transmogrifier(u'test2')
+[('_path', 'html'),
+ ('text',
+  '\n<html>\n<head><title>Title</title></head>\n<body>\n<h1 class="description">My description</h1>\n<p>Some <a href="link">text</a></p>\n</body>\n</html>')]

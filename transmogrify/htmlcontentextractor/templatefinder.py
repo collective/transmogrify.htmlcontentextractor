@@ -20,35 +20,18 @@ This blueprint extracts out title, description and body from html
 either via xpath, TAL. This blueprint can either extract fields from a single item, or the item
 could represent a list of data about items linked on different pages.
 
-The options to blueprint are rules on how to extract the content from the 'text' field.
-
-Rules are in the form of ::
-
-  (title|description|text|anything) = (text|html|optional|tal) Expression
-
-Where expression is either TAL or XPath
 
 For example ::
 
   [template1]
   blueprint = transmogrify.htmlcontentextractor
-  title       = text //div[@class='body']//h1[1]
-  _delete1    = optional //div[@class='body']//a[@class='headerlink']
-  _delete2    = optional //div[contains(@class,'admonition-description')]
-  description = text //div[contains(@class,'admonition-description')]//p[@class='last']
-  text        = html //div[@class='body']
-
-Note that for a single template e.g. template1, ALL of the XPaths need to match otherwise
-that template will be skipped and the next template tried. If you'd like to make it
-so that a single XPath isn't nessary for the template to match then use the keyword `optional` or `optionaltext`
-instead of `text` or `html` before the XPath.
-
-
-When an XPath is applied within a single template, the HTML it matches will be removed from the page.
-Another rule in that same template can't match the same HTML fragment.
-
-If a content part is not useful (e.g. redundant text, title or description) it is a way to effectively remove that HTML
-from the content.
+  rules =
+      title       = //div[@class='body']//h1[1]/text()
+      description = //div[contains(@class,'admonition-description')]//p[@class='last']/text()
+      text        = //div[@class='body']
+      _delete1    = optional //div[@class='body']//a[@class='headerlink']
+      _delete2    = optional //div[contains(@class,'admonition-description')]
+  html-key = text
 
 To help debug your template rules you can set debug mode.
 
@@ -58,27 +41,38 @@ For more information about XPath see
 - http://blog.browsermob.com/2009/04/test-your-selenium-xpath-easily-with-firebug/
 
 
-
 Options:
 
-:_apply_to_paths:
+:rules:
+  Newline separated list of rules either 'field = tal TAL_EXPRESSION', or
+  'field = XPATH, or 'field = optional XPATH'. Each XPATH must match unless the 'optional' keyword is
+  used. Each XPATH removes it's selected nodes from the html and no two XPATHs can select
+  the same html node. TAL expressions are evaluated last so have access to already extracted fields.
+
+:html-key:
+  The field key which contains the html to extract from
+
+:remainder-key:
+  The field to set with html left after all the XPATH selected nodes have been removed. Defauls to '_template'.
+
+:apply_to_paths:
   a XPATH which selects a href which links to the item extracted fields should be applied to. If empty current item
   will be used.
 
-:_apply_to_paths_prefix:
+:apply_to_paths_prefix:
   if relative urls are being selected by _apply_to_paths, then append this url. TODO: this should go away and standard
   url relative link processing should occur.
 
-:_match:
+:match:
   When using _apply_to_paths, you can optionally just process content within each block selected by this XPATH. If
   multiple links are found then extracted data is shared by item within the matched item.
 
-:_act_as_filter:
+:act_as_filter:
   .default 'No'. If 'True', any content extracted will be applied to items even if they had previously
   matched another templatefinder blueprint before this one. Determining if a previous template has already matched is
   done by checking the existances of the '_template' field which is set on a successful match with the remaining html.
 
-:_generate_missing:
+:generate_missing:
   default 'No'. When using `_apply_to_paths` and the item refered to by the link doesn't yet exist, create it. Generally
   this should not be the case as the whole site will be crawled.
 
@@ -109,26 +103,39 @@ class TemplateFinder(object):
         self.groups = {}
         self.name = name
         self.logger = logging.getLogger(name)
-        order = options.get('_order', '').split()
-        self.match = options.get('_match', '/').strip()
-        self.apply_to_paths = options.get('_apply_to_paths', '').strip()
-        self.apply_to_paths_prefix = options.get('_apply_to_paths_prefix', '').strip("/")
-        self.act_as_filter = options.get('_act_as_filter', "No").lower() in ('yes', 'true')
-        self.generate_missing = options.get('_generate_missing', "No").lower() in ('yes', 'true')
+        self.match = options.get('match', options.get('_match', '/')).strip()
+        self.apply_to_paths = options.get('apply_to_paths', options.get('_apply_to_paths', '')).strip()
+        self.apply_to_paths_prefix = options.get('apply_to_paths_prefix',
+                                                 options.get('_apply_to_paths_prefix', '')).strip("/")
+        self.act_as_filter = options.get('act_as_filter',
+                                         options.get('_act_as_filter', "No")).lower() in ('yes', 'true')
+        self.generate_missing = options.get('_generate_missing',
+                                            options.get('_generate_missing', "No")).lower() in ('yes', 'true')
 
-        def specialkey(key):
-            if key in ['blueprint', 'debug', '_order', '_match',
-                '_apply_to_paths', '_apply_to_paths_prefix', '_act_as_filter', '_generate_missing']:
-                return True
-            if key in order:
-                return True
-            if key.startswith('@'):
-                return True
-            return False
-        keys = order + [k for k in options.keys() if not specialkey(k)]
+        self.text_key = options.get('html-key', 'text').strip()
+        self.template_key = options.get('remainder-key', '_template').strip()
 
-        for key in keys:
-            value = options[key]
+        rules = options.get('rules','')
+        if rules:
+            rules = [[v.strip() for v in line.split('=',1)]
+                     for line in rules.split('\n') if line.strip()]
+        else:
+            # backwards compatibility
+            order = options.get('_order', '').split()
+            def specialkey(key):
+                if key in ['blueprint', 'debug', '_order', '_match',
+                    '_apply_to_paths', '_apply_to_paths_prefix', '_act_as_filter',
+                    '_generate_missing', 'html-key', 'remainder-key']:
+                    return True
+                if key in order:
+                    return True
+                if key.startswith('@'):
+                    return True
+                return False
+            keys = order + [k for k in options.keys() if not specialkey(k)]
+            rules = [(key, options[key]) for key in keys]
+
+        for key,value in rules:
             try:
                 group, field = key.split('-', 1)
                 group = int(group)
@@ -176,6 +183,7 @@ class TemplateFinder(object):
         for item in site_items:
             items_to_yield.append(item)
 
+
             content = self.getHtml(item)
             if content is None:
                 continue
@@ -198,9 +206,11 @@ class TemplateFinder(object):
                         if self.generate_missing:
                             target_item = {
                                 "_path": target_path,
-                                "_site_url": item["_site_url"],
                                 "_template_generated": True
                             }
+                            if '_site_url' in item:
+                                target_item["_site_url"] = item["_site_url"]
+
                         else:
                             continue
                     else:
@@ -226,7 +236,7 @@ class TemplateFinder(object):
                         if target_item[key] == NOTSET:
                             del target_item[key]
 
-                    if target_item.get("_template_generated") and "_template" in target_item:
+                    if target_item.get("_template_generated") and self.template_key in target_item:
                         site_items_lookup[target_path] = target_item
                         items_to_yield.append(target_item)
 
@@ -313,13 +323,13 @@ class TemplateFinder(object):
                     self.logger.debug("SKIP: %s (no html)" % (path))
                 yield item
                 continue
-            if not self.act_as_filter and '_template' in item:
+            if not self.act_as_filter and self.template_key in item:
                 # don't apply the template if another has already been applied
                 alreadymatched += 1
                 self.logger.debug("SKIP: %s (already extracted)" % (item['_path']))
                 yield item
                 continue
-            path = item['_site_url'] + item['_path']
+            path = item['_path']
 
             # try each group in turn to see if they work
             gotit = False
@@ -445,18 +455,18 @@ class TemplateFinder(object):
         if '_tree' in item:
             del item['_tree']
         if not self.act_as_filter:
-            item['_template'] = None
+            item[self.template_key] = etree.tostring(tree, method='html', encoding=unicode)
 
         return item
 
     def getHtml(self, item):
         """Return the right html content based on attribute and mimetype"""
         path = item.get('_path', None)
-        content = item.get('_content', None) or item.get('text', None)
-        mimetype = item.get('_mimetype', None)
+        content = item.get(self.text_key, None)
+#        mimetype = item.get('_mimetype', None)
         if path is not None and \
-           content is not None and \
-           mimetype in ['text/xhtml', 'text/html']:
+           content is not None:
+#           mimetype in ['text/xhtml', 'text/html']:
             return content
         else:
             return None

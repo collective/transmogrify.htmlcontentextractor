@@ -39,6 +39,8 @@ setup(name='transmogrify.htmlcontentextractor',
           'lxml',
           'BeautifulSoup',
           'collective.transmogrifier',
+          'zope.app.pagetemplate',
+          'zope.app.component',
           ],
       entry_points="""
             [z3c.autoinclude.plugin]
