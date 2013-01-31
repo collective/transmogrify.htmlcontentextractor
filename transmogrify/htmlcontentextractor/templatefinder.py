@@ -9,7 +9,11 @@ import lxml.html.soupparser
 import lxml.etree
 from collective.transmogrifier.utils import Expression
 import datetime
-from collections import OrderedDict
+try:
+    from collections import OrderedDict
+except ImportError:
+    # python 2.6 or earlier, use backport
+    from ordereddict import OrderedDict
 import logging
 
 """
@@ -237,8 +241,9 @@ class TemplateFinder(object):
 
                     # set to tempory values during process_items
                     target_item["_content"] = fragment_content
-                    target_item["_mimetype"] = "text/html"
-                    target_item["_metaitem"] = item
+                    #target_item["_mimetype"] = "text/html"
+                    #TODO: what is _metaitem for?
+                    #target_item["_metaitem"] = item
 
                     list(self.process_items([target_item]))
 
