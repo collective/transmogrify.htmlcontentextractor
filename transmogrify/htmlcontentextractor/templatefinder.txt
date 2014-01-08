@@ -1,11 +1,13 @@
-HTMLContentExtractor
-====================
+
+
+transmogrify.htmlcontentextractor
+---------------------------------
 
 This blueprint extracts out fields from html either via xpath rules or by automatic cluster
 analysis
 
-transmogrify.htmlcontentextractor
----------------------------------
+XPath rules
+~~~~~~~~~~~
 
 We have a simple html structure we want to break down into title, description and body
 
@@ -74,6 +76,10 @@ If one or more of the rules don't match the item will be untouched
  ('text',
   '\n<html>\n<head><title>Title</title></head>\n<body>\n<h1 class="description">My description</h1>\n<p>Some <a href="link">text</a></p>\n</body>\n</html>')]
 
+Optional XPath
+~~~~~~~~~~~~~~
+
+
 If you wish to allow extraction even when some rules don't match you can make them optional
 
 >>> blueprint = """
@@ -92,7 +98,10 @@ If you wish to allow extraction even when some rules don't match you can make th
  ('text', u'<p>Some <a href="link">text</a></p>\n'),
  ('title', u'Title')]
 
- You can post process fields using tal expressions
+TAL Expressions
+~~~~~~~~~~~~~~~
+
+You can post process fields using tal expressions
 
 >>> blueprint = """
 ... [template]
@@ -111,3 +120,67 @@ If you wish to allow extraction even when some rules don't match you can make th
  ('description', u'My description'),
  ('text', u'<p>Some <a href="link">text</a></p>\n'),
  ('title', u'blah')]
+
+
+Extracting for linked items
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Sometimes the information you need to extract is not on the page itself but on a page linked to the item.
+For example if we had a listing such as
+
+>>> html = """
+...   <div><a href="item1">Item1</a> updated: <span>12/12/12</span></div>
+...   <div><a href="item2">Item2</a> updated: <span>10/10/10</span></div>
+... """
+
+
+Our extraction blueprint will use the apply_to_paths setting to select the href.
+
+>>> blueprint = """
+... [template]
+... blueprint = transmogrify.htmlcontentextractor
+... repeat = //div
+... item_url = //a/@href
+... rules =
+...   modifiedDate = //span
+...   title = //a/text()
+... tal =
+...   modifiedDate = python:datetime.datetime(item['modifiedDate'])
+... """
+
+
+In order make this work we need the linked items to also exist so we'll create a new source with item1 and item2
+in it.
+
+>>> config = """
+... [transmogrifier]
+... pipeline =
+...     source
+...     template
+...     printer
+... [source]
+... blueprint = transmogrify.htmlcontentextractor.test.htmlsource
+... listing=
+...  %(html)s
+... item1=item1
+... item2=item2
+...
+... %(blueprint)s
+...
+... [printer]
+... blueprint = collective.transmogrifier.sections.tests.pprinter
+... """
+
+
+>>> registerConfig(u'listing1', config % dict(html=html, blueprint=blueprint) ); transmogrifier(u'listing1')
+[('_path', 'item2'),
+ ('text', 'item2'),
+ ('title', 'Item 2')]
+[('_path', 'item1'),
+ ('text', 'item1'),
+ ('title', 'Item 1')]
+[('_path', 'listing'),
+ ('text',
+  '\n<a href="item1">Item1</a> updated: <span>12/12/12</span>\n<a href="item2">Item2</a> updated: <span>10/10/10</span>')]
+
+

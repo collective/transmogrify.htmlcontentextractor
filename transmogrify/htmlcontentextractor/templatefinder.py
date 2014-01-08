@@ -15,6 +15,7 @@ except ImportError:
     # python 2.6 or earlier, use backport
     from ordereddict import OrderedDict
 import logging
+import urlparse
 
 """
 transmogrify.htmlcontentextractor
@@ -63,17 +64,15 @@ Options:
 :remainder-key:
   The field to set with html left after all the XPATH selected nodes have been removed. Defauls to '_template'.
 
-:apply_to_paths:
-  a XPATH which selects a href which links to the item extracted fields should be applied to. If empty current item
-  will be used.
+:repeat:
+  Extract metadata about content linked to it a list on a page. Repeat is an XPATH
+  where each other XPATH is relative to. To use repeat you need to also specify a 'url'.
 
-:apply_to_paths_prefix:
-  if relative urls are being selected by _apply_to_paths, then append this url. TODO: this should go away and standard
-  url relative link processing should occur.
+:url:
+  a XPATH which selects a href which links to the item. Any fields matched will
+  be associated with the item linked rather than the current page. Must be used
+  with 'repeat'.
 
-:match:
-  When using _apply_to_paths, you can optionally just process content within each block selected by this XPATH. If
-  multiple links are found then extracted data is shared by item within the matched item.
 
 :act_as_filter:
   .default 'No'. If 'True', any content extracted will be applied to items even if they had previously
@@ -111,12 +110,16 @@ class TemplateFinder(object):
         self.groups = {}
         self.name = name
         self.logger = logging.getLogger(name)
-        self.match = options.get('match', options.get('_match', '/')).strip()
-        self.apply_to_paths = options.get('apply_to_paths', options.get('_apply_to_paths', '')).strip()
-        self.apply_to_paths_prefix = options.get('apply_to_paths_prefix',
-                                                 options.get('_apply_to_paths_prefix', '')).strip("/")
-        self.act_as_filter = options.get('act_as_filter',
-                                         options.get('_act_as_filter', "No")).lower() in ('yes', 'true')
+        def best(keys, default):
+            for n in keys:
+                if n in options:
+                    return options[n].strip()
+            return default
+        self.repeat = best(['repeat', 'match', '_match'], '/')
+        self.url = best(['url', 'apply_to_paths', '_apply_to_paths'], '')
+
+        self.act_as_filter = best(['act_as_filter', '_act_as_filter'], "No")
+        self.act_as_filter = self.act_as_filter.lower() in ('yes', 'true')
         self.generate_missing = options.get('_generate_missing',
                                             options.get('_generate_missing', "No")).lower() in ('yes', 'true')
 
@@ -174,163 +177,24 @@ class TemplateFinder(object):
 
 
     def __iter__(self):
-        if self.apply_to_paths:
-            return self.attribute_to_paths()
+        site_items = []
+        site_items_lookup = {}
+        if self.repeat:
+            # In this case we need all items to be processed first so
+            # we can match any urls we find to the existing item and merge
+            for item in self.previous:
+                site_items.append(item)
+                if '_path' in item:
+                    site_items_lookup[item['_site_url']+item['_path']] = item
         else:
-            return self.attribute_to_item()
+            site_items = self.previous
 
-    def attribute_to_item(self):
-        """Process items applying attributes to current item"""
-        return self.process_items(self.previous)
-
-    def attribute_to_paths(self):
-        """Process items applying attributes to different item based on _apply_to_paths
-           Optionally splitting content by _match
-        """
-        site_items = []
-        site_items_lookup = {}
-        #collected_pseudo_items = {}
-
-        # read in all items
-        for item in self.previous:
-            site_items.append(item)
-            site_items_lookup[item.get('_path')] = item
-
-        # find fragments in items
-        items_to_yield = []
-        for item in site_items:
-            items_to_yield.append(item)
-
-
-            content = self.getHtml(item)
-            if content is None:
-                continue
-
-            tree = lxml.html.fromstring(content)
-
-            for fragment in tree.xpath(self.match, namespaces=ns):
-
-                fragment_content = etree.tostring(fragment)
-                fragment_tree = lxml.html.fromstring(fragment_content)
-
-                # get each target_item in the path selection and process with fragment_content
-                for target_path in fragment_tree.xpath(self.apply_to_paths, namespaces=ns):
-                    # TODO: Better path normalization, eg: http://example.com/123.asp
-                    target_path = target_path.strip("/")
-                    if len(self.apply_to_paths_prefix) > 0:
-                        target_path = self.apply_to_paths_prefix + "/" + target_path
-
-                    if target_path not in site_items_lookup:
-                        if self.generate_missing:
-                            target_item = {
-                                "_path": target_path,
-                                "_template_generated": True
-                            }
-                            if '_site_url' in item:
-                                target_item["_site_url"] = item["_site_url"]
-
-                        else:
-                            continue
-                    else:
-                        target_item = site_items_lookup[target_path]
-
-                    # save _content, _mimetype and _template
-                    NOTSET = object()
-                    target_content = target_item.get("_content", NOTSET)
-                    target_mimetype = target_item.get("_content", NOTSET)
-
-                    # set to tempory values during process_items
-                    target_item["_content"] = fragment_content
-                    #target_item["_mimetype"] = "text/html"
-                    #TODO: what is _metaitem for?
-                    #target_item["_metaitem"] = item
-
-                    list(self.process_items([target_item]))
-
-                    # reset to original values
-                    target_item["_content"] = target_content
-                    target_item["_mimetype"] = target_mimetype
-
-                    for key in ["_content", "_mimetype"]:
-                        if target_item[key] == NOTSET:
-                            del target_item[key]
-
-                    if target_item.get("_template_generated") and self.template_key in target_item:
-                        site_items_lookup[target_path] = target_item
-                        items_to_yield.append(target_item)
-
-        for item in items_to_yield:
-            yield item
-
-    def attribute_to_folders(self):
-        """Process items applying attributes to different item based on _apply_to_folders
-           Optionally splitting content by _match
-        """
-        site_items = []
-        site_items_lookup = {}
-        the_folder = self.apply_to_folders.rstrip("/").rsplit("/", 1)[0]
-
-        # read in all items
-        for item in self.previous:
-            site_items.append(item)
-            site_items_lookup[item.get('_path')] = item
-
-        # find fragments in items
-        for item in site_items:
-
-            content = self.getHtml(item)
-            if content is None:
-                continue
-
-            tree = lxml.html.fromstring(content)
-
-            for fragment in tree.xpath(self.match, namespaces=ns):
-
-                fragment_content = etree.tostring(fragment)
-                fragment_tree = lxml.html.fromstring(fragment_content)
-
-                # get each target_item in the path selection and process with fragment_content
-                for target_path in fragment_tree.xpath(the_folder, namespaces=ns):
-                    # TODO: Better path normalization, eg: http://example.com/123.asp
-                    target_path = target_path.strip("/")
-
-                    if target_path not in site_items_lookup:
-                        # TODO: should implement an option to create new content
-                        self.logger.error("'%s' Item not already crawled" % target_path)
-                        continue
-
-                    target_item = site_items_lookup[target_path]
-
-                    # save _content, _mimetype and _template
-                    target_content = target_item.get("_content", NOTSET)
-                    target_mimetype = target_item.get("_content", NOTSET)
-
-                    # set to tempory values during process_items
-                    target_item["_content"] = fragment_content
-                    target_item["_mimetype"] = "text/html"
-                    target_item["_metaitem"] = item
-
-                    list(self.process_items([target_item]))
-
-                    # reset to original values
-                    target_item["_content"] = target_content
-                    target_item["_mimetype"] = target_mimetype
-
-                    for key in ["_content", "_mimetype"]:
-                        if target_item[key] == NOTSET:
-                            del target_item[key]
-
-        for item in site_items:
-            yield item
-
-    def process_items(self, items):
-        """Process items from basic template"""
         notextracted = []
         total = 0
         skipped = 0
         alreadymatched = 0
         stats = {}
-        for item in items:
+        for item in site_items:
             #import pdb; pdb.set_trace()
             total += 1
             content = self.getHtml(item)
@@ -348,23 +212,49 @@ class TemplateFinder(object):
                 self.logger.debug("SKIP: %s (already extracted)" % (item['_path']))
                 yield item
                 continue
-            path = item['_path']
-
-            # try each group in turn to see if they work
-            gotit = False
-            for groupname in sorted(self.groups.keys()):
-                group = self.groups[groupname]
-                tree = lxml.html.fromstring(content)
-                if group.get('path', path) == path and self.extract(group, tree, item, stats):
-                    gotit = True
-                    break
-            if gotit:
-                yield item
+            base = item['_site_url']+item['_path']
+            tree = lxml.html.fromstring(content)
+            if self.repeat:
+                repeated = tree.xpath(self.repeat, namespaces=ns)
             else:
+                repeated = [tree]
+
+            gotit = False
+            for fragment in repeated:
+                # get each target_item in the path selection and process with fragment_content
+                if self.repeat:
+                    target_url = None
+                    for target_url in fragment.xpath(self.url, namespaces=ns):
+                        target_url = urlparse.urljoin(base, target_url.strip("/"))
+                        if target_url in site_items_lookup:
+                            target_item = site_items_lookup[target_url]
+                            break
+                else:
+                    target_item = item
+                path = target_item['_path']
+
+                # try each group in turn to see if they work
+                for groupname in sorted(self.groups.keys()):
+                    group = self.groups[groupname]
+                    #TODO: before we reset the tree for each group attempt
+                    # we could copy the document each time?, or else
+                    # perhaps a group should be applied to all repeats first?
+                    # the problem is that extract removes parts from the document
+                    # probably should make extract keep tree intact unless it matches.
+                    #tree = lxml.html.fromstring(content)
+
+                    if group.get('path', path) == path and \
+                            self.extract(group, fragment, target_item, stats):
+                        gotit = True
+                        break
+                if not gotit:
+                    #one of the repeats didn't match so we stop processing item
+                    break
+
+            if not gotit:
                 notextracted.append(item)
-                yield item
-            #        for item in notextracted:
-            #            yield item
+            yield item
+
         self.logger.info("extracted %d/%d/%d/%d %s" % (total - len(notextracted) - alreadymatched - skipped,
                                                        total - alreadymatched - skipped,
                                                        total - skipped,
@@ -374,7 +264,6 @@ class TemplateFinder(object):
         unique = OrderedDict()
         nomatch = []
         optional = []
-        #import pdb; pdb.set_trace()
         for field, xps in pats.items():
             if field == 'path':
                 continue
