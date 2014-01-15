@@ -140,10 +140,10 @@ Our extraction blueprint will use the apply_to_paths setting to select the href.
 ... [template]
 ... blueprint = transmogrify.htmlcontentextractor
 ... repeat = //div
-... item_url = //a/@href
+... url = ./a/@href
 ... rules =
-...   modifiedDate = //span
-...   title = //a/text()
+...   modifiedDate = ./span
+...   title = ./a/text()
 ... tal =
 ...   modifiedDate = python:datetime.datetime(item['modifiedDate'])
 ... """
