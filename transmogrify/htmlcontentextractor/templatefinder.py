@@ -9,6 +9,7 @@ import lxml.html.soupparser
 import lxml.etree
 from collective.transmogrifier.utils import Expression
 import datetime
+from DateTime import DateTime
 try:
     from collections import OrderedDict
 except ImportError:
@@ -16,6 +17,7 @@ except ImportError:
     from ordereddict import OrderedDict
 import logging
 import urlparse
+import sys
 
 """
 transmogrify.htmlcontentextractor
@@ -90,6 +92,8 @@ Options:
 ns = {'re': "http://exslt.org/regular-expressions"}
 attr = re.compile(r':(?P<attr>[^/:]*)=(?P<val>[^/:]*)')
 
+class TALException(Exception):
+    pass
 
 def toXPath(pat):
     #td:valign=top/p:class=msonormal/span
@@ -161,7 +165,7 @@ class TemplateFinder(object):
             for line in value.strip().split('\n'):
                 xp = line.strip()
                 if format.lower() == 'tal':
-                    xp = Expression(xp, transmogrifier, name, options, datetime=datetime)
+                    xp = Expression(xp, transmogrifier, name, options, datetime=datetime, DateTime=DateTime)
                 xps.append((format, xp))
             group = self.groups.setdefault(group, OrderedDict())
             group[field] = xps
@@ -220,15 +224,21 @@ class TemplateFinder(object):
                 repeated = [tree]
 
             gotit = False
+            uncrawled_targets = 0
             for fragment in repeated:
                 # get each target_item in the path selection and process with fragment_content
                 if self.repeat:
-                    target_url = None
+                    target_item = None
                     for target_url in fragment.xpath(self.url, namespaces=ns):
                         target_url = urlparse.urljoin(base, target_url.strip("/"))
                         if target_url in site_items_lookup:
                             target_item = site_items_lookup[target_url]
                             break
+                    if target_item is None:
+                        # we haven't crawled the target page so can't set the
+                        # metadata.
+                        uncrawled_targets += 1
+                        continue
                 else:
                     target_item = item
                 path = target_item['_path']
@@ -250,6 +260,8 @@ class TemplateFinder(object):
                 if not gotit:
                     #one of the repeats didn't match so we stop processing item
                     break
+            if uncrawled_targets:
+                self.logger.info("SKIP: %s (can't apply metadata to %s not crawled urls)" % (item['_path'], uncrawled_targets))
 
             if not gotit:
                 notextracted.append(item)
@@ -305,7 +317,7 @@ class TemplateFinder(object):
             for format, node in nodes:
                 if getattr(node, 'drop_tree', None) is None:
                     continue
-                if not node.getparent():
+                if node.getparent() is None:
                     # already dropped
                     toremove.append((format, node))
                     continue
@@ -332,6 +344,7 @@ class TemplateFinder(object):
                         extracted[field] += value
                 else:
                     extracted[field] += etree.tostring(node, method='html', encoding=unicode)
+                self.logger.debug("EXTRACTED: %s=%s" % (field, extracted[field]))
         # What was this code for?
         #for field, nodes in unique.items():
         #    for format, node in nodes:
@@ -351,8 +364,12 @@ class TemplateFinder(object):
             for format, tal in xps:
                 if format.lower() != 'tal':
                     continue
-                value = tal(item, re=re)
+                try:
+                    value = tal(item, re=re)
+                except Exception, e:
+                    raise TALException("%s tal caused %s"% (field,str(e))), None, sys.exc_info()[2]
                 extracted[field] = extracted.get(field, '') + value
+                self.logger.debug("EXTRACTED: %s=%s" % (field, extracted[field]))
         for field, tal in self.tal:
             value = tal(item, re=re)
             extracted[field] = value
